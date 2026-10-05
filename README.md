@@ -1,6 +1,7 @@
 # dsh-memory
 
 > github.com/ChenYueqi2024/dsh-memory · 配套插件：github.com/ChenYueqi2024/dsh-commit
+> 项目主页：https://chenyueqi2024.github.io/dsh-memory/
 
 给 [DeepSeek Harness（dsh）](https://github.com/deepseek-ai/deepseek-harness)装上**跨会话项目记忆**的原生插件。
 
