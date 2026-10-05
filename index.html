@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dsh-memory · 给 DeepSeek Harness 装上跨会话项目记忆</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo-row">
+      <div class="logo-badge">◈</div>
+      <div>
+        <h1>dsh-memory</h1>
+        <div class="subtitle">给 DeepSeek Harness 装上跨会话项目记忆 · 原生 Cordis 插件（MIT）</div>
+      </div>
+    </div>
+    <div class="cta-row">
+      <a class="btn primary" href="https://github.com/ChenYueqi2024/dsh-memory">GitHub 仓库</a>
+      <a class="btn" href="#install">快速开始</a>
+      <a class="btn" href="#commit">配套插件 dsh-commit</a>
+    </div>
+  </header>
+
+  <section class="demo">
+    <h2>十秒看懂它解决什么问题</h2>
+    <div class="demo-grid">
+      <div class="term">
+        <div class="term-bar"><i></i><i></i><i></i><span>会话 1 · 真实记录</span></div>
+        <pre>&gt; dsh "请记住：本项目是厦门大学期末工程，
+  所有回答必须使用中文。"
+
+[模型调用 memory_extract 工具]
+✓ 沉淀 2 条新记忆：
+  [fact]       本项目是厦门大学的期末工程。
+  [preference] 用户要求所有回答必须使用中文。</pre>
+      </div>
+      <div class="term">
+        <div class="term-bar"><i></i><i></i><i></i><span>会话 2 · 全新启动</span></div>
+        <pre>&gt; dsh "这个项目是什么？你怎么知道的？"
+
+本项目是厦门大学的期末工程。
+这**不是我从本次对话推出来的，而是来自
+跨会话记忆**——记忆条目 #c32400e3，
+沉淀于 2026-10-05。</pre>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>六项核心能力</h2>
+    <div class="features">
+      <div class="feature"><h3>自动沉淀</h3><p>每轮结束自动用一次辅助 LLM 调用抽取决策、约定、偏好、事实；无需用户喊"记住"。</p></div>
+      <div class="feature"><h3>语义去重</h3><p>词项包含度判定复述，"用中文回答"与"用户要求中文回答"合并为一条——重复即强化置信度。</p></div>
+      <div class="feature"><h3>工作区隔离</h3><p>记忆按项目路径打标，多项目互不污染；全局记忆处处可见。</p></div>
+      <div class="feature"><h3>相关性注入</h3><p>新会话按有效置信度 + 关键词重合度排序注入 Top-N，拒绝无脑全量灌上下文。</p></div>
+      <div class="feature"><h3>置信度衰减</h3><p>21 天半衰期，沉默的记忆自动淡出，过时的约定不再污染上下文。</p></div>
+      <div class="feature"><h3>来源可解释</h3><p>每条记忆带来源会话编号与日期，被问"你怎么知道的"能说清出处，错了可用 memory_forget 删除。</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>架构：四个官方扩展点的组合</h2>
+    <div class="arch">
+      <div class="arch-row"><span class="arch-tag">沉淀</span><code>session/event</code> 积累对话文本 → <code>agent/turn-stopping</code> 轮末触发抽取（headless 下 <code>session/disposed</code> 来不及触发，这是源码剖析得出的关键结论）</div>
+      <div class="arch-row"><span class="arch-tag">抽取</span><code>ctx.llm.stream()</code> 一次辅助调用输出 JSON 候选，不干扰 Agent 主循环</div>
+      <div class="arch-row"><span class="arch-tag">存储</span><code>ctx.storageDomain</code> 官方存储域 <code>dsh_memory</code>，per-record JSON 后端，零自建依赖</div>
+      <div class="arch-row"><span class="arch-tag">注入</span><code>agent/created</code> 时挂 <code>systemPrompt.section()</code>，按当前问题动态求值</div>
+      <div class="arch-row"><span class="arch-tag">管理</span><code>ctx.tools.register()</code> 暴露 memory_list / memory_forget / memory_extract</div>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>快速开始</h2>
+    <div class="term wide">
+      <div class="term-bar"><i></i><i></i><i></i><span>bash</span></div>
+      <pre>git clone https://github.com/ChenYueqi2024/dsh-memory && cd dsh-memory
+npm install && npm run build && npm test     # 16 个单元用例
+
+# 装入你的 profile（复制到 node_modules 并在 cordis.patch.yml 插入一行）
+# config: { provider: deepseek-official, model: deepseek-flash }</pre>
+    </div>
+  </section>
+
+  <section id="commit">
+    <h2>配套插件：dsh-commit</h2>
+    <p class="sec-desc">第二个原生插件，展示同一套插件机制的复用：读取 git 暂存区 diff，生成中文约定式提交信息。<b>只生成、不提交</b>——权限管线完整保留给模型自己的 shell 工具。</p>
+    <div class="term wide">
+      <div class="term-bar"><i></i><i></i><i></i><span>真实输出</span></div>
+      <pre>&gt; 用 git_commit_message 生成提交信息
+
+chore(license): 添加 MIT 许可证</pre>
+    </div>
+    <p class="sec-desc">这条提交信息被原样用于 dsh-memory 仓库的真实提交——<b>我们用自己开发的插件，开发了自己这个项目</b>。</p>
+  </section>
+
+  <footer>
+    厦门大学《学科实践三 —— A+ 协同编程·项目实战》期末工程 · 单人组 · 全程 AI（ZCode）协同开发<br>
+    基于 <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness (dsh) 0.2.0-rc.2</a> · MIT License · 数据与引述均来自真实运行记录
+  </footer>
+</div>
+</body>
+</html>
