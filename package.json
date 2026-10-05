@@ -1,0 +1,22 @@
+{
+  "name": "dsh-memory",
+  "version": "0.1.0",
+  "description": "dsh-memory: cross-session project memory for DeepSeek Harness — auto-extract durable facts/decisions/preferences at session end, retrieve and inject them into future sessions' system prompt.",
+  "type": "module",
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

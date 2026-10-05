@@ -1,0 +1,8 @@
+# The dsh-memory bundle patch. As a bundle it inserts itself over the profile
+# root; users installing via `dsh plugin add` get this file automatically.
+- insert:
+    - id: dsh-memory
+      name: dsh-memory
+      config:
+        provider: deepseek-official
+        model: deepseek-flash
