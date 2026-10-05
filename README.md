@@ -1,5 +1,7 @@
 # dsh-memory
 
+> github.com/ChenYueqi2024/dsh-memory · 配套插件：github.com/ChenYueqi2024/dsh-commit
+
 给 [DeepSeek Harness（dsh）](https://github.com/deepseek-ai/deepseek-harness)装上**跨会话项目记忆**的原生插件。
 
 dsh 的每次会话都是失忆的：项目约定、技术决策、用户偏好要么靠人工维护 AGENTS.md，要么每次重新交代。dsh-memory 让 Agent 在对话中**自动沉淀**值得记住的信息，并在未来的会话里**自动想起**。
