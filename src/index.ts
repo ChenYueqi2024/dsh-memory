@@ -110,6 +110,7 @@ export function apply(ctx: Context, config: Config): void {
     transcripts.delete(session.id)
     latestQuery.delete(session.id)
     workspaces.delete(session.id)
+    lastSeen.delete(session.id)
     if (!buffer || buffer.size() < config.extractMinChars) {
       debugLog(`session-end: skipped (buffer ${buffer ? buffer.size() : 0} < ${config.extractMinChars})`)
       return
@@ -212,12 +213,13 @@ export function apply(ctx: Context, config: Config): void {
       const sessionId: string = exec.agent?.session?.id
         ?? (() => { throw new Error('memory_extract requires an owning agent session') })()
       const buffer = transcripts.get(sessionId) ?? new TranscriptBuffer()
-      const saved = await settle('tool', sessionId, buffer, exec.agent?.session?.header?.cwd)
+      const { newRows, reinforced } = await settle('tool', sessionId, buffer, exec.agent?.session?.header?.cwd)
       lastSeen.set(sessionId, buffer.seen)
       buffer.keepTail(1600)
       const note = lastError ? `；失败原因：${lastError}` : ''
       lastError = undefined
-      return { saved, detail: `本次沉淀 ${saved} 条新记忆（总计 ${requireStore().all().length} 条）${note}` }
+      const saved = newRows + reinforced
+      return { saved, detail: `本次新增 ${newRows} 条、强化 ${reinforced} 条（总计 ${requireStore().all().length} 条）${note}` }
     },
     presentCall: () => ({ card: 'generic', title: '沉淀当前会话记忆', kind: 'other', rawInput: {} }),
   }))
@@ -237,14 +239,14 @@ export function apply(ctx: Context, config: Config): void {
     return store
   }
 
-  /** Run extraction, merge into the store, and return how many new rows landed. */
-  async function settle(trigger: string, sessionId: string, buffer: TranscriptBuffer, workspace?: string): Promise<number> {
+  /** Run extraction, merge into the store; returns {newRows, reinforced}. */
+  async function settle(trigger: string, sessionId: string, buffer: TranscriptBuffer, workspace?: string): Promise<{ newRows: number; reinforced: number }> {
     await ready
     const transcript = buffer.render()
     if (transcript.trim().length === 0) {
       lastError = 'transcript is empty (no buffered user/assistant text)'
       debugLog(`settle(${trigger}): ${lastError}`)
-      return 0
+      return { newRows: 0, reinforced: 0 }
     }
     debugLog(`settle(${trigger}): transcript ${transcript.length} chars`)
     try {
@@ -256,19 +258,20 @@ export function apply(ctx: Context, config: Config): void {
       const extracted = await extractMemories(ctx, config, sessionId, transcript, existing)
       debugLog(`settle(${trigger}): extracted ${JSON.stringify(extracted)}`)
       const store = requireStore()
-      let saved = await store.merge(extracted.new, { sessionId, workspace: ws })
+      let newRows = await store.merge(extracted.new, { sessionId, workspace: ws })
+      let reinforced = 0
       for (const idPrefix of extracted.reinforce) {
-        if (await store.reinforce(idPrefix)) saved++
+        if (await store.reinforce(idPrefix)) reinforced++
       }
-      if (extracted.new.length > 0 || extracted.reinforce.length > 0) {
+      if (newRows + reinforced > 0) {
         log.info(`dsh-memory: ${trigger} extracted ${extracted.new.length} new, reinforced ${extracted.reinforce.length}`)
       }
-      return saved
+      return { newRows, reinforced }
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error)
       debugLog(`settle(${trigger}) FAILED: ${lastError}`)
       log.warn(`dsh-memory: extraction failed (${trigger}): ${lastError}`)
-      return 0
+      return { newRows: 0, reinforced: 0 }
     }
   }
 

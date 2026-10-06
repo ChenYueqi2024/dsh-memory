@@ -1,5 +1,7 @@
 # dsh-memory
 
+![test](https://github.com/ChenYueqi2024/dsh-memory/actions/workflows/test.yml/badge.svg)
+
 > github.com/ChenYueqi2024/dsh-memory · 配套插件：github.com/ChenYueqi2024/dsh-commit
 > 项目主页：https://chenyueqi2024.github.io/dsh-memory/
 

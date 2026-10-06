@@ -134,14 +134,16 @@ export class MemoryStore {
 
   markHit(id: string): void {
     const record = this.table.get(id)
-    if (record) {
-      void this.table.put(id, {
-        ...record,
-        hits: record.hits + 1,
-        confidence: Math.min(2, record.confidence + 0.02),
-        lastHitAt: new Date().toISOString(),
-      })
-    }
+    if (!record) return
+    // 去抖：注入段在每次 prompt 组装时求值，60 秒内不重复计数，避免写放大
+    const now = Date.now()
+    if (record.lastHitAt && now - Date.parse(record.lastHitAt) < 60_000) return
+    void this.table.put(id, {
+      ...record,
+      hits: record.hits + 1,
+      confidence: Math.min(2, record.confidence + 0.02),
+      lastHitAt: new Date(now).toISOString(),
+    })
   }
 
   async forget(idPrefix?: string, keyword?: string): Promise<MemoryRecord | undefined> {

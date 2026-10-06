@@ -98,14 +98,20 @@ describe('MemoryStore.effective / rankForInjection', () => {
 })
 
 describe('MemoryStore.markHit', () => {
-  it('reinforces confidence on each hit, capped at 2.0', async () => {
+  it('counts one hit per debounce window and reinforces confidence', async () => {
     const rec = record({ id: 'hit-me-1', text: '常被命中的记忆条目', confidence: 1 })
     const table = fakeTable([rec]) as never
     const store = new MemoryStore(table)
     for (let i = 0; i < 5; i++) store.markHit('hit-me-1')
     await new Promise(r => setTimeout(r, 20))
-    expect(store.all()[0].confidence).toBeCloseTo(1.1, 5)
-    expect(store.all()[0].hits).toBe(5)
+    expect(store.all()[0].confidence).toBeCloseTo(1.02, 5)
+    expect(store.all()[0].hits).toBe(1)
+    // 超过去抖窗口后再次命中应重新计数
+    const hit = store.all()[0]
+    await table.put('hit-me-1', { ...hit, lastHitAt: new Date(Date.now() - 61_000).toISOString() })
+    store.markHit('hit-me-1')
+    await new Promise(r => setTimeout(r, 20))
+    expect(store.all()[0].hits).toBe(2)
   })
 })
 
