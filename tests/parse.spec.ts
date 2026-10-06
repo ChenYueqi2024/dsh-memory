@@ -6,17 +6,17 @@ describe('parseExtraction object contract', () => {
     const text = '{"new":[{"kind":"fact","text":"新的记忆条目内容"}],"reinforce":["#ab12cd34"]}'
     const out = parseExtraction(text)
     expect(out.new).toEqual([{ kind: 'fact', text: '新的记忆条目内容' }])
-    expect(out.reinforce).toEqual(['#ab12cd34'])
+    expect(out.reinforce).toEqual(['ab12cd34'])  // 前导 # 被剥掉，与存储 id 直接匹配
   })
 
   it('accepts empty object output', () => {
-    expect(parseExtraction('{"new":[],"reinforce":[]}')).toEqual({ new: [], reinforce: [] })
+    expect(parseExtraction('{"new":[],"reinforce":[]}')).toEqual({ new: [], reinforce: [], supersede: [] })
   })
 
   it('parses supersede arrays and truncates over-long text', () => {
     const long = '长'.repeat(500)
     const out = parseExtraction(`{"new":[{"kind":"fact","text":"${long}"}],"reinforce":[],"supersede":["#abc12345"]}`)
-    expect(out.supersede).toEqual(['#abc12345'])
+    expect(out.supersede).toEqual(['abc12345'])
     expect(out.new[0].text.length).toBe(400)
   })
 

@@ -96,7 +96,8 @@ export class MemoryStore {
    * bump confidence instead of writing a new row. Returns the reinforced row.
    */
   async reinforce(idPrefix: string): Promise<MemoryRecord | undefined> {
-    const record = this.all().find(m => m.id.startsWith(idPrefix))
+    const needle = idPrefix.replace(/^#/, '')
+    const record = this.all().find(m => m.id.startsWith(needle))
     if (!record) return undefined
     const updated = { ...record, confidence: Math.min(2, record.confidence + 0.15), createdAt: new Date().toISOString() }
     await this.table.put(record.id, updated)
@@ -109,7 +110,8 @@ export class MemoryStore {
    * stay in the store for audit; they can still be forgotten explicitly.
    */
   async supersede(idPrefix: string): Promise<MemoryRecord | undefined> {
-    const record = this.all().find(m => m.id.startsWith(idPrefix))
+    const needle = idPrefix.replace(/^#/, '')
+    const record = this.all().find(m => m.id.startsWith(needle))
     if (!record || record.supersededAt) return record
     const updated = { ...record, supersededAt: new Date().toISOString(), confidence: Math.min(record.confidence, 0.1) }
     await this.table.put(record.id, updated)
@@ -179,7 +181,8 @@ export class MemoryStore {
   async forget(idPrefix?: string, keyword?: string): Promise<MemoryRecord | undefined> {
     let target: MemoryRecord | undefined
     if (idPrefix) {
-      target = this.all().find(m => m.id.startsWith(idPrefix))
+      const needle = idPrefix.replace(/^#/, '')
+      target = this.all().find(m => m.id.startsWith(needle))
     } else if (keyword) {
       const needle = keyword.toLowerCase()
       const matches = this.all().filter(m => m.text.toLowerCase().includes(needle))

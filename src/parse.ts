@@ -27,8 +27,8 @@ export function parseExtraction(text: string): ExtractionOutput {
         const parsed = JSON.parse(text.slice(start, end + 1))
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           const out: ExtractionOutput = { new: candidatesOf(parsed.new), reinforce: idsOf(parsed.reinforce), supersede: idsOf(parsed.supersede) }
-          if (out.new.length || out.reinforce.length) return out
-          return { new: [], reinforce: [] }
+          if (out.new.length || out.reinforce.length || out.supersede.length) return out
+          return { new: [], reinforce: [], supersede: [] }
         }
       } catch { /* fall through to array parsing */ }
     }
@@ -53,7 +53,10 @@ function candidatesOf(raw: unknown): MemoryCandidate[] {
 
 function idsOf(raw: unknown): string[] {
   if (!Array.isArray(raw)) return []
-  return raw.filter((v): v is string => typeof v === 'string' && v.length >= 4)
+  return raw
+    .filter((v): v is string => typeof v === 'string')
+    .map(v => v.trim().replace(/^#/, ''))
+    .filter(v => v.length >= 4)
 }
 
 function legacyArray(text: string): MemoryCandidate[] {
