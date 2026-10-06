@@ -56,8 +56,10 @@
       <div class="feature"><h3>语义去重</h3><p>词项包含度判定复述，"用中文回答"与"用户要求中文回答"合并为一条——重复即强化置信度。</p></div>
       <div class="feature"><h3>工作区隔离</h3><p>记忆按项目路径打标，多项目互不污染；全局记忆处处可见。</p></div>
       <div class="feature"><h3>相关性注入</h3><p>新会话按有效置信度 + 关键词重合度排序注入 Top-N，拒绝无脑全量灌上下文。</p></div>
-      <div class="feature"><h3>置信度衰减</h3><p>21 天半衰期，沉默的记忆自动淡出，过时的约定不再污染上下文。</p></div>
+      <div class="feature"><h3>差异化衰减</h3><p>按类别设置半衰期——事实 14 天、决策 30 天、偏好 45 天；沉默的记忆自动淡出。</p></div>
       <div class="feature"><h3>来源可解释</h3><p>每条记忆带来源会话编号与日期，被问"你怎么知道的"能说清出处，错了可用 memory_forget 删除。</p></div>
+      <div class="feature"><h3>冲突消解</h3><p>新信息推翻旧记忆时，旧条目标记"已被取代"退役留档，新事实独立入库——记忆不会自相矛盾。</p></div>
+      <div class="feature"><h3>审批准入</h3><p>requireApproval 开启后，自动沉淀的记忆需人工批准才注入——对抗记忆污染。</p></div>
     </div>
   </section>
 
@@ -77,7 +79,7 @@
     <div class="term wide">
       <div class="term-bar"><i></i><i></i><i></i><span>bash</span></div>
       <pre>git clone https://github.com/ChenYueqi2024/dsh-memory && cd dsh-memory
-npm install && npm run build && npm test     # 16 个单元用例
+npm install && npm run build && npm test     # 24 个单元用例（dsh-commit 另有 7 个）
 
 # 装入你的 profile（复制到 node_modules 并在 cordis.patch.yml 插入一行）
 # config: { provider: deepseek-official, model: deepseek-flash }</pre>
