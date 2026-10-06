@@ -87,7 +87,8 @@ export function apply(ctx: Context, config: Config): void {
   ready.catch(error => log.error(`dsh-memory: storage open failed: ${error instanceof Error ? error.message : String(error)}`))
 
   // ── 1. 沉淀：积累会话文本，会话结束时抽取 ──────────────────────────────
-  ctx.on('session/event', (session: { id: string; header?: { cwd?: string } }, event: { type: string; data: any }) => {
+  ctx.on('session/event', (session: { id: string; header?: { cwd?: string; origin?: string } }, event: { type: string; data: any }) => {
+    if (session.header?.origin === 'subagent') return
     const cwd = normalizeWorkspace(session.header?.cwd)
     if (cwd) workspaces.set(session.id, cwd)
     if (event.type === 'user/message') {
@@ -118,6 +119,7 @@ export function apply(ctx: Context, config: Config): void {
   // turn-stopping 在每轮结束边界可等待地触发，是自动沉淀的可靠挂载点。
   ctx.on('agent/turn-stopping', async ({ agent }: { agent: any }) => {
     const sessionId: string | undefined = agent?.session?.id
+    if (agent?.session?.header?.origin === 'subagent') return
     debugLog(`turn-stopping fired: session=${sessionId} buffer=${transcripts.get(sessionId ?? '')?.size() ?? 'none'}`)
     if (!sessionId) return
     const buffer = transcripts.get(sessionId)
@@ -129,6 +131,7 @@ export function apply(ctx: Context, config: Config): void {
   // ── 2. 注入：新 agent 创建时把相关记忆写进 system prompt ───────────────
   const promptFibers = new Map<object, { dispose(): Promise<void> }>()
   ctx.on('agent/created', async ({ agent }: { agent: any }) => {
+    if (agent?.session?.header?.origin === 'subagent') return
     const fiber = agent.ctx.inject(['systemPrompt'], (scope: any) => {
       scope.systemPrompt.section({
         name: 'context:dsh-memory',

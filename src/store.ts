@@ -122,7 +122,14 @@ export class MemoryStore {
 
   markHit(id: string): void {
     const record = this.table.get(id)
-    if (record) void this.table.put(id, { ...record, hits: record.hits + 1, lastHitAt: new Date().toISOString() })
+    if (record) {
+      void this.table.put(id, {
+        ...record,
+        hits: record.hits + 1,
+        confidence: Math.min(2, record.confidence + 0.02),
+        lastHitAt: new Date().toISOString(),
+      })
+    }
   }
 
   async forget(idPrefix?: string, keyword?: string): Promise<MemoryRecord | undefined> {

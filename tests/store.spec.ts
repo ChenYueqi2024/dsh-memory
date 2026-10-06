@@ -97,6 +97,18 @@ describe('MemoryStore.effective / rankForInjection', () => {
   })
 })
 
+describe('MemoryStore.markHit', () => {
+  it('reinforces confidence on each hit, capped at 2.0', async () => {
+    const rec = record({ id: 'hit-me-1', text: '常被命中的记忆条目', confidence: 1 })
+    const table = fakeTable([rec]) as never
+    const store = new MemoryStore(table)
+    for (let i = 0; i < 5; i++) store.markHit('hit-me-1')
+    await new Promise(r => setTimeout(r, 20))
+    expect(store.all()[0].confidence).toBeCloseTo(1.1, 5)
+    expect(store.all()[0].hits).toBe(5)
+  })
+})
+
 describe('MemoryStore.forget', () => {
   it('deletes by id prefix and by unique keyword, not by ambiguous keyword', async () => {
     const table = fakeTable([

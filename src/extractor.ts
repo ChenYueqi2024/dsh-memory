@@ -24,7 +24,8 @@ const EXTRACTION_SYSTEM = [
   '2. 每条记忆必须自包含（不依赖上下文就能看懂），一句话，中文。',
   '3. 相似信息合并成一条。',
   '4. 只输出 JSON 数组，格式 [{"kind":"decision","text":"..."}]，没有任何值得记的就输出 []。',
-  '5. 不要输出数组以外的任何文字。',
+  '5. 不要沉淀关于记忆系统本身或本次对话的元评论（如"这条记忆值得保存""记忆库中没有……"）。',
+  '6. 不要输出数组以外的任何文字。',
 ].join('\n')
 
 /** Rolling transcript for one session, capped to protect the extraction call. */
