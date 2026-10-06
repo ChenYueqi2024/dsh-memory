@@ -1,6 +1,6 @@
 # dsh-memory
 
-![test](https://github.com/ChenYueqi2024/dsh-memory/actions/workflows/test.yml/badge.svg)
+![test](https://github.com/ChenYueqi2024/dsh-memory/actions/workflows/test.yml/badge.svg) · [English](README.en.md)
 
 > github.com/ChenYueqi2024/dsh-memory · 配套插件：github.com/ChenYueqi2024/dsh-commit
 > 项目主页：https://chenyueqi2024.github.io/dsh-memory/
@@ -65,6 +65,7 @@ dsh --profile <name> "这个项目用什么包管理器？你怎么知道的？"
 | `provider` / `model` | `deepseek-official` / `deepseek-flash` | 记忆抽取的辅助 LLM 路由，可指向任何已配置的兼容端点 |
 | `extractMinChars` | 120 | 触发自动抽取的最小对话文本量 |
 | `injectMax` | 30 | 单次注入 system prompt 的最大记忆条数 |
+| `requireApproval` | false | 开启后自动沉淀的记忆需 memory_approve 批准才注入（防记忆污染） |
 | `maxOutputTokens` / `timeoutMs` | 1024 / 120000 | 抽取调用限额 |
 
 诊断：设置环境变量 `DSH_MEMORY_DEBUG=<文件路径>` 可输出沉淀/注入的详细日志。

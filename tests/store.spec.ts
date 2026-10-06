@@ -60,12 +60,15 @@ describe('MemoryStore.merge', () => {
 })
 
 describe('MemoryStore.effective / rankForInjection', () => {
-  it('decays confidence with a 21-day half-life', () => {
+  it('decays confidence with per-kind half-lives (fact=14d, preference=45d)', () => {
     const store = new MemoryStore(fakeTable() as never)
-    const fresh = record({ createdAt: new Date().toISOString(), confidence: 1 })
-    const old = record({ createdAt: new Date(Date.now() - 21 * 86_400_000).toISOString(), confidence: 1 })
-    expect(store.effective(fresh)).toBeCloseTo(1, 5)
-    expect(store.effective(old)).toBeCloseTo(0.5, 5)
+    const freshFact = record({ kind: 'fact', createdAt: new Date().toISOString(), confidence: 1 })
+    const fact14d = record({ kind: 'fact', createdAt: new Date(Date.now() - 14 * 86_400_000).toISOString(), confidence: 1 })
+    const pref14d = record({ kind: 'preference', createdAt: new Date(Date.now() - 14 * 86_400_000).toISOString(), confidence: 1 })
+    expect(store.effective(freshFact)).toBeCloseTo(1, 5)
+    expect(store.effective(fact14d)).toBeCloseTo(0.5, 5)
+    // 同样 14 天：偏好几乎没衰减，事实已减半 —— 事实保鲜期短、偏好更持久
+    expect(store.effective(pref14d)).toBeGreaterThan(0.75)
   })
 
   it('never injects memories decayed below the floor', async () => {

@@ -21,6 +21,8 @@ export interface MemoryRecord {
   lastHitAt?: string
   /** Set when a later memory supersedes this one; superseded rows never inject. */
   supersededAt?: string
+  /** false = awaiting user approval (requireApproval mode); undefined/true = approved. */
+  approved?: boolean
 }
 
 /** Normalized extraction candidate arriving from the LLM. */
@@ -40,8 +42,17 @@ export interface MergeContext {
 
 const KIND_RANK: Record<MemoryRecord['kind'], number> = { decision: 4, convention: 3, preference: 2, fact: 1 }
 
-/** Confidence half-life in days: a memory unused for this long halves in weight. */
-export const HALF_LIFE_DAYS = 21
+/**
+ * Confidence half-life in days, per kind: facts go stale fastest (versions,
+ * endpoints change), preferences linger longest. Decisions/conventions sit in
+ * between — they do age, but a three-week-old decision is usually still good.
+ */
+export const HALF_LIFE_BY_KIND: Record<MemoryRecord['kind'], number> = {
+  decision: 30,
+  convention: 30,
+  preference: 45,
+  fact: 14,
+}
 /** Memories whose effective confidence falls below this are never injected. */
 export const MIN_EFFECTIVE = 0.15
 /** Token-containment similarity at/above which a candidate counts as a rephrased duplicate. */
@@ -61,6 +72,7 @@ export class MemoryStore {
    * adding a row. Returns how many new rows were written.
    */
   async merge(candidates: MemoryCandidate[], context: MergeContext): Promise<number> {
+    const approved = context.approved !== false
     let added = 0
     for (const candidate of candidates) {
       const text = candidate.text.trim()
@@ -85,6 +97,7 @@ export class MemoryStore {
         workspace: context.workspace,
         confidence: 1 + (KIND_RANK[candidate.kind] ?? 0) * 0.1,
         hits: 0,
+        approved,
       })
       added++
     }
@@ -118,10 +131,12 @@ export class MemoryStore {
     return updated
   }
 
-  /** Time-decayed confidence: repeats keep a memory alive, silence fades it. */
+  /** Time-decayed confidence with per-kind half-life: repeats keep a memory
+   * alive, silence fades it — facts fastest, preferences slowest. */
   effective(record: MemoryRecord): number {
     const ageDays = (Date.now() - Date.parse(record.createdAt)) / 86_400_000
-    return record.confidence * Math.pow(0.5, Math.max(0, ageDays) / HALF_LIFE_DAYS)
+    const halfLife = HALF_LIFE_BY_KIND[record.kind] ?? 21
+    return record.confidence * Math.pow(0.5, Math.max(0, ageDays) / halfLife)
   }
 
   /**
@@ -134,6 +149,7 @@ export class MemoryStore {
   rankForInjection(max: number, query?: string, workspace?: string, budgetChars = 4000): MemoryRecord[] {
     const queryTerms = query ? tokenize(query) : undefined
     const scoped = this.all().filter(record => record.supersededAt === undefined)
+      .filter(record => record.approved !== false)
       .filter(record => record.workspace === undefined || record.workspace === workspace)
     const scored = scoped
       .map(record => ({ record, eff: this.effective(record) }))
@@ -176,6 +192,15 @@ export class MemoryStore {
       confidence: Math.min(2, record.confidence + 0.02),
       lastHitAt: new Date(now).toISOString(),
     })
+  }
+
+  /** Approve a pending record (requireApproval mode). Returns the approved row. */
+  async approve(idPrefix: string): Promise<MemoryRecord | undefined> {
+    const record = this.all().find(m => m.id.startsWith(idPrefix.replace(/^#/, '')))
+    if (!record) return undefined
+    const updated = { ...record, approved: true }
+    await this.table.put(record.id, updated)
+    return updated
   }
 
   async forget(idPrefix?: string, keyword?: string): Promise<MemoryRecord | undefined> {

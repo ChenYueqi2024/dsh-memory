@@ -39,6 +39,8 @@ export interface Config {
   extractMinChars: number
   /** Maximum memories injected into one system prompt. */
   injectMax: number
+  /** When true, auto-extracted memories stay pending until memory_approve. */
+  requireApproval: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -48,13 +50,14 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().step(1).min(1000).default(120000),
   extractMinChars: z.number().step(1).min(0).default(120),
   injectMax: z.number().step(1).min(1).default(30),
+  requireApproval: z.boolean().default(false),
 })
 
 /** Storage domain: one per-record table of memory rows. */
 const memoryDomain = defineDomain({
   name: 'dsh_memory',
-  version: 3,
-  compatibleVersions: [1, 2],
+  version: 4,
+  compatibleVersions: [1, 2, 3],
   layout: 'per-record',
   tables: {
     memories: {
@@ -66,6 +69,7 @@ const memoryDomain = defineDomain({
         sourceSessionId: zod.string(),
         workspace: zod.string().optional(),
         supersededAt: zod.string().optional(),
+        approved: zod.boolean().optional(),
         confidence: zod.number(),
         hits: zod.number(),
         lastHitAt: zod.string().optional(),
@@ -180,10 +184,27 @@ export function apply(ctx: Context, config: Config): void {
       const memories = requireStore().all()
       return {
         count: memories.length,
-        lines: memories.map(m => `#${m.id.slice(0, 8)} [${m.kind}] ${m.text}（置信度 ${m.confidence.toFixed(2)}${m.workspace ? `，工作区 ${m.workspace}` : '，全局'}${m.supersededAt ? '，已被取代' : ''}）`),
+        lines: memories.map(m => `#${m.id.slice(0, 8)} [${m.kind}] ${m.text}（置信度 ${m.confidence.toFixed(2)}${m.workspace ? `，工作区 ${m.workspace}` : '，全局'}${m.supersededAt ? '，已被取代' : ''}${m.approved === false ? '，⏳待审批' : ''}）`),
       }
     },
     presentCall: () => ({ card: 'generic', title: '列出项目记忆', kind: 'other', rawInput: {} }),
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'memory_approve',
+    description: 'Approve one pending memory by id (requireApproval mode). Approved memories become eligible for injection.',
+    parameters: {
+      id: { type: 'string', required: true, description: 'Memory id prefix from memory_list.' },
+    },
+    output: {
+      schema: { type: 'object', additionalProperties: false, properties: { approved: { type: 'boolean', required: true }, detail: { type: 'string', required: true } } },
+      render: (_args, value) => [{ type: 'text', text: value.detail }],
+    },
+    async execute(args) {
+      const out = await requireStore().approve(args.id)
+      return { approved: out !== undefined, detail: out ? `已批准：[${out.kind}] ${out.text}` : '未找到匹配的记忆' }
+    },
+    presentCall: args => ({ card: 'generic', title: '批准项目记忆', kind: 'other', rawInput: args }),
   }))
 
   ctx.tools.register(defineTool({
@@ -223,7 +244,9 @@ export function apply(ctx: Context, config: Config): void {
       const note = lastError ? `；失败原因：${lastError}` : ''
       lastError = undefined
       const saved = newRows + reinforced
-      return { saved, detail: `本次新增 ${newRows} 条、强化 ${reinforced} 条（总计 ${requireStore().all().length} 条）${note}` }
+      const pending = requireStore().all().filter(m => m.approved === false).length
+      const pendingNote = pending > 0 ? `；待审批 ${pending} 条（memory_approve 批准）` : ''
+      return { saved, detail: `本次新增 ${newRows} 条、强化 ${reinforced} 条（总计 ${requireStore().all().length} 条）${pendingNote}${note}` }
     },
     presentCall: () => ({ card: 'generic', title: '沉淀当前会话记忆', kind: 'other', rawInput: {} }),
   }))
@@ -270,7 +293,7 @@ export function apply(ctx: Context, config: Config): void {
         const rec = await store.supersede(idPrefix)
         if (rec) { supersededIds.push(rec.id); superseded++ }
       }
-      let newRows = await store.merge(extracted.new, { sessionId, workspace: ws, excludeIds: supersededIds })
+      let newRows = await store.merge(extracted.new, { sessionId, workspace: ws, excludeIds: supersededIds, approved: !config.requireApproval })
       let reinforced = 0
       for (const idPrefix of extracted.reinforce) {
         if (await store.reinforce(idPrefix)) reinforced++
