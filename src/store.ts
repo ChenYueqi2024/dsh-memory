@@ -86,6 +86,18 @@ export class MemoryStore {
     return added
   }
 
+  /**
+   * Reinforce an existing record by id prefix (LLM-judged semantic duplicate):
+   * bump confidence instead of writing a new row. Returns the reinforced row.
+   */
+  async reinforce(idPrefix: string): Promise<MemoryRecord | undefined> {
+    const record = this.all().find(m => m.id.startsWith(idPrefix))
+    if (!record) return undefined
+    const updated = { ...record, confidence: Math.min(2, record.confidence + 0.15), createdAt: new Date().toISOString() }
+    await this.table.put(record.id, updated)
+    return updated
+  }
+
   /** Time-decayed confidence: repeats keep a memory alive, silence fades it. */
   effective(record: MemoryRecord): number {
     const ageDays = (Date.now() - Date.parse(record.createdAt)) / 86_400_000

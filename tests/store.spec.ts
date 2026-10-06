@@ -109,6 +109,17 @@ describe('MemoryStore.markHit', () => {
   })
 })
 
+describe('MemoryStore.reinforce', () => {
+  it('bumps confidence of an existing record by id prefix', async () => {
+    const rec = record({ id: 'abcd1234-z', text: '已有记忆条目内容', confidence: 1 })
+    const store = new MemoryStore(fakeTable([rec]) as never)
+    const out = await store.reinforce('abcd')
+    expect(out?.confidence).toBeCloseTo(1.15, 5)
+    expect(store.all()).toHaveLength(1)
+    expect(await store.reinforce('zzzz')).toBeUndefined()
+  })
+})
+
 describe('MemoryStore.forget', () => {
   it('deletes by id prefix and by unique keyword, not by ambiguous keyword', async () => {
     const table = fakeTable([

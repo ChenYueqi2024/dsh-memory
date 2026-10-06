@@ -8,9 +8,15 @@ import { createUserMessage, BlockAssembler } from '@deepseek-ai/dsh-llm'
 import type { Context } from '@deepseek-ai/cordis'
 import type { MemoryCandidate } from './store.ts'
 import type { Config } from './index.ts'
-import { parseCandidates } from './parse.ts'
+import { parseExtraction } from './parse.ts'
 
 const KINDS = ['decision', 'convention', 'preference', 'fact'] as const
+
+/** Existing memories shown to the extractor so it can reinforce instead of re-extract. */
+export interface ExistingMemory {
+  id: string
+  text: string
+}
 
 const EXTRACTION_SYSTEM = [
   '你是项目会话的记忆提取器。从 AI 编程助手会话记录中提取"值得跨会话记住"的信息。',
@@ -32,13 +38,28 @@ const EXTRACTION_SYSTEM = [
 export class TranscriptBuffer {
   private readonly entries: { role: 'user' | 'assistant'; text: string }[] = []
   private totalChars = 0
+  private seenChars = 0
 
   constructor(private readonly maxChars = 24000) {}
 
   add(role: 'user' | 'assistant', text: string): void {
     this.entries.push({ role, text })
     this.totalChars += text.length
+    this.seenChars += text.length
     while (this.totalChars > this.maxChars && this.entries.length > 2) {
+      const dropped = this.entries.shift()!
+      this.totalChars -= dropped.text.length
+    }
+  }
+
+  /** Cumulative characters ever added (never decreases; drives delta-triggered extraction). */
+  get seen(): number {
+    return this.seenChars
+  }
+
+  /** Drop oldest entries until only the trailing `chars` characters remain. */
+  keepTail(chars: number): void {
+    while (this.entries.length > 1 && this.totalChars > chars) {
       const dropped = this.entries.shift()!
       this.totalChars -= dropped.text.length
     }
@@ -69,7 +90,8 @@ export async function extractMemories(
   config: Config,
   sessionId: string,
   transcript: string,
-): Promise<MemoryCandidate[]> {
+  existing: ExistingMemory[] = [],
+): Promise<{ new: MemoryCandidate[]; reinforce: string[] }> {
   const framed = `会话记录如下：\n${transcript}\n\n请输出记忆 JSON 数组。`
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), config.timeoutMs)
@@ -97,7 +119,7 @@ export async function extractMemories(
       .filter((block: any) => block.type === 'text')
       .map((block: any) => block.text)
       .join(' ')
-    return parseCandidates(text)
+    return parseExtraction(text)
   } finally {
     clearTimeout(timer)
   }
