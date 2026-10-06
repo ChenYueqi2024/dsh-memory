@@ -238,7 +238,9 @@ export function apply(ctx: Context, config: Config): void {
       const sessionId: string = exec.agent?.session?.id
         ?? (() => { throw new Error('memory_extract requires an owning agent session') })()
       const buffer = transcripts.get(sessionId) ?? new TranscriptBuffer()
-      const { newRows, reinforced } = await settle('tool', sessionId, buffer, exec.agent?.session?.header?.cwd)
+      // 用户显式要求"记住X"（调用本工具）视为已授权：requireApproval 模式下也直接生效；
+      // 只有轮末的自动沉淀才走待审批
+      const { newRows, reinforced } = await settle('tool', sessionId, buffer, exec.agent?.session?.header?.cwd, true)
       lastSeen.set(sessionId, buffer.seen)
       buffer.keepTail(1600)
       const note = lastError ? `；失败原因：${lastError}` : ''
@@ -267,7 +269,7 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   /** Run extraction, merge into the store; returns {newRows, reinforced}. */
-  async function settle(trigger: string, sessionId: string, buffer: TranscriptBuffer, workspace?: string): Promise<{ newRows: number; reinforced: number }> {
+  async function settle(trigger: string, sessionId: string, buffer: TranscriptBuffer, workspace?: string, forceApproved = false): Promise<{ newRows: number; reinforced: number }> {
     await ready
     const transcript = buffer.render()
     if (transcript.trim().length === 0) {
@@ -293,7 +295,7 @@ export function apply(ctx: Context, config: Config): void {
         const rec = await store.supersede(idPrefix)
         if (rec) { supersededIds.push(rec.id); superseded++ }
       }
-      let newRows = await store.merge(extracted.new, { sessionId, workspace: ws, excludeIds: supersededIds, approved: !config.requireApproval })
+      let newRows = await store.merge(extracted.new, { sessionId, workspace: ws, excludeIds: supersededIds, approved: forceApproved || !config.requireApproval })
       let reinforced = 0
       for (const idPrefix of extracted.reinforce) {
         if (await store.reinforce(idPrefix)) reinforced++

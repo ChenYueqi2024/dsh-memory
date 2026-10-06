@@ -75,7 +75,8 @@ dsh --profile <name> "这个项目用什么包管理器？你怎么知道的？"
 1. **原生插件而非 MCP server**：官方 memory 方案是外挂 MCP 进程。原生插件零跨进程开销、可直接挂会话生命周期钩子（Claude Code 的 hooks 桥甚至不支持 SessionEnd）、共享凭证与存储体系。
 2. **`agent/turn-stopping` 为主挂载点**：headless/CLI 进程在会话结束后立即退出，`session/disposed` 来不及触发；turn-stopping 在每轮结束边界可等待地触发，保证沉淀落盘。
 3. **抽取与主循环隔离**：记忆抽取用独立的辅助 LLM 调用（`ctx.llm.stream`），不占用、不干扰 Agent 主循环。
-4. **重复即强化**：同一信息被再次表达时置信度 +0.1（上限 2.0），配合 21 天半衰期，形成"常用记忆更牢、沉默记忆淡出"的自然淘汰。
+4. **重复即强化**：同一信息被再次表达时置信度 +0.1（上限 2.0），配合按类别差异化衰减（fact 14 天 / decision·convention 30 天 / preference 45 天），形成"常用记忆更牢、沉默记忆淡出"的自然淘汰。
+5. **审批准入（可选）**：`requireApproval` 开启后，轮末自动沉淀的记忆处于待审批态、不注入——只有用户显式要求记住的（memory_extract）直接生效。产品级缓解记忆污染。
 
 ## 已知限制
 

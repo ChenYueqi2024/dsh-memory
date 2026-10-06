@@ -1,6 +1,6 @@
 {
   "name": "dsh-memory",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Cross-session project memory for DeepSeek Harness (dsh): auto-extract durable facts/decisions/preferences at session end, retrieve and inject them into future sessions. Uses the host dsh instance model route - no bundled API key.",
   "type": "module",
   "main": "dist/index.js",
