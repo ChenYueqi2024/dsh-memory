@@ -1,16 +1,19 @@
 {
   "name": "dsh-memory",
-  "version": "0.1.0",
-  "description": "dsh-memory: cross-session project memory for DeepSeek Harness — auto-extract durable facts/decisions/preferences at session end, retrieve and inject them into future sessions' system prompt.",
+  "version": "0.2.0",
+  "description": "Cross-session project memory for DeepSeek Harness (dsh): auto-extract durable facts/decisions/preferences at session end, retrieve and inject them into future sessions. Uses the host dsh instance model route - no bundled API key.",
   "type": "module",
   "main": "dist/index.js",
   "files": [
     "dist",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "node build.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm test && npm run build"
   },
   "dsh": {
     "bundle": {
@@ -19,6 +22,44 @@
   },
   "devDependencies": {
     "esbuild": "^0.27.0",
+    "vite": "^8.3.3",
     "vitest": "^5.0.3"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "ai-agent",
+    "memory",
+    "agent-plugin"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChenYueqi2024/dsh-memory.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ChenYueqi2024/dsh-memory/issues"
+  },
+  "homepage": "https://chenyueqi2024.github.io/dsh-memory/",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-storage-domain": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.0-rc.2"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-llm": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-storage-domain": {
+      "optional": true
+    }
   }
 }

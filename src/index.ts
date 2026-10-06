@@ -53,18 +53,19 @@ export const Config: z<Config> = z.object({
 /** Storage domain: one per-record table of memory rows. */
 const memoryDomain = defineDomain({
   name: 'dsh_memory',
-  version: 2,
-  compatibleVersions: [1],
+  version: 3,
+  compatibleVersions: [1, 2],
   layout: 'per-record',
   tables: {
     memories: {
       valueSchema: zod.object({
         id: zod.string(),
         kind: zod.enum(['decision', 'convention', 'preference', 'fact']),
-        text: zod.string(),
+        text: zod.string().max(500),
         createdAt: zod.string(),
         sourceSessionId: zod.string(),
         workspace: zod.string().optional(),
+        supersededAt: zod.string().optional(),
         confidence: zod.number(),
         hits: zod.number(),
         lastHitAt: zod.string().optional(),
@@ -81,6 +82,8 @@ export function apply(ctx: Context, config: Config): void {
   const latestQuery = new Map<string, string>()
   const workspaces = new Map<string, string>()
   const lastSeen = new Map<string, number>()
+  let failStreak = 0
+  let cooldownUntil = 0
 
   const ready = (async () => {
     const domain: Domain<typeof memoryDomain> = await ctx.storageDomain.open(memoryDomain)
@@ -126,6 +129,7 @@ export function apply(ctx: Context, config: Config): void {
     if (!sessionId) return
     const buffer = transcripts.get(sessionId)
     if (!buffer) return
+    if (Date.now() < cooldownUntil) return  // 连续失败退避中，暂停自动抽取
     // 增量触发：只处理自上次抽取以来新增的文本，避免每轮重复抽取
     const delta = buffer.seen - (lastSeen.get(sessionId) ?? 0)
     if (delta < config.extractMinChars || buffer.size() === 0) return
@@ -176,7 +180,7 @@ export function apply(ctx: Context, config: Config): void {
       const memories = requireStore().all()
       return {
         count: memories.length,
-        lines: memories.map(m => `#${m.id.slice(0, 8)} [${m.kind}] ${m.text}（置信度 ${m.confidence.toFixed(2)}${m.workspace ? `，工作区 ${m.workspace}` : '，全局'}）`),
+        lines: memories.map(m => `#${m.id.slice(0, 8)} [${m.kind}] ${m.text}（置信度 ${m.confidence.toFixed(2)}${m.workspace ? `，工作区 ${m.workspace}` : '，全局'}${m.supersededAt ? '，已被取代' : ''}）`),
       }
     },
     presentCall: () => ({ card: 'generic', title: '列出项目记忆', kind: 'other', rawInput: {} }),
@@ -258,19 +262,34 @@ export function apply(ctx: Context, config: Config): void {
       const extracted = await extractMemories(ctx, config, sessionId, transcript, existing)
       debugLog(`settle(${trigger}): extracted ${JSON.stringify(extracted)}`)
       const store = requireStore()
-      let newRows = await store.merge(extracted.new, { sessionId, workspace: ws })
+      // 冲突消解先于去重：被取代的旧记录要从复述去重的匹配池里排除，
+      // 否则"同主题改写"（如发布节奏从每周改为每月）会被去重误判为复述
+      const supersededIds: string[] = []
+      let superseded = 0
+      for (const idPrefix of extracted.supersede) {
+        const rec = await store.supersede(idPrefix)
+        if (rec) { supersededIds.push(rec.id); superseded++ }
+      }
+      let newRows = await store.merge(extracted.new, { sessionId, workspace: ws, excludeIds: supersededIds })
       let reinforced = 0
       for (const idPrefix of extracted.reinforce) {
         if (await store.reinforce(idPrefix)) reinforced++
       }
-      if (newRows + reinforced > 0) {
-        log.info(`dsh-memory: ${trigger} extracted ${extracted.new.length} new, reinforced ${extracted.reinforce.length}`)
+      failStreak = 0
+      if (newRows + reinforced + superseded > 0) {
+        log.info(`dsh-memory: ${trigger} new ${extracted.new.length}, reinforced ${reinforced}, superseded ${superseded}`)
       }
       return { newRows, reinforced }
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error)
       debugLog(`settle(${trigger}) FAILED: ${lastError}`)
       log.warn(`dsh-memory: extraction failed (${trigger}): ${lastError}`)
+      failStreak++
+      if (failStreak >= 3) {
+        cooldownUntil = Date.now() + 10 * 60_000  // 连续 3 次失败，自动抽取退避 10 分钟
+        failStreak = 0
+        log.warn('dsh-memory: extraction failed 3x, auto-extraction paused for 10 minutes')
+      }
       return { newRows: 0, reinforced: 0 }
     }
   }

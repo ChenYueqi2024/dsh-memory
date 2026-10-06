@@ -13,6 +13,13 @@ describe('parseExtraction object contract', () => {
     expect(parseExtraction('{"new":[],"reinforce":[]}')).toEqual({ new: [], reinforce: [] })
   })
 
+  it('parses supersede arrays and truncates over-long text', () => {
+    const long = '长'.repeat(500)
+    const out = parseExtraction(`{"new":[{"kind":"fact","text":"${long}"}],"reinforce":[],"supersede":["#abc12345"]}`)
+    expect(out.supersede).toEqual(['#abc12345'])
+    expect(out.new[0].text.length).toBe(400)
+  })
+
   it('tolerates junk around the JSON object', () => {
     const text = '好的。\n{"new":[],"reinforce":["c32400e3"]}\n以上。'
     expect(parseExtraction(text).reinforce).toEqual(['c32400e3'])

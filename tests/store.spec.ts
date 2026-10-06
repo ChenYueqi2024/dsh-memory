@@ -126,6 +126,27 @@ describe('MemoryStore.reinforce', () => {
   })
 })
 
+describe('MemoryStore.supersede and budget', () => {
+  it('excludes superseded records from injection but keeps them stored', async () => {
+    const old = record({ id: 'old-one-1', text: '部署窗口是周三凌晨' })
+    const store = new MemoryStore(fakeTable([old]) as never)
+    const out = await store.supersede('old-one')
+    expect(out?.supersededAt).toBeDefined()
+    expect(store.rankForInjection(10)).toEqual([])
+    expect(store.all()).toHaveLength(1)
+    expect(await store.supersede('old-one')).toBeDefined()
+  })
+
+  it('caps total injected text by the character budget', () => {
+    const records = Array.from({ length: 8 }, (_, i) =>
+      record({ id: `bud-${i}`, text: `记忆条目第${i}条的内容比较长用来测试预算截断逻辑`, createdAt: new Date(Date.now() - i * 1000).toISOString() }))
+    const store = new MemoryStore(fakeTable(records) as never)
+    const out = store.rankForInjection(10, undefined, undefined, 200)
+    expect(out.length).toBeGreaterThan(1)
+    expect(out.reduce((n, r) => n + r.text.length, 0)).toBeLessThanOrEqual(200 + 24 * out.length)
+  })
+})
+
 describe('MemoryStore.forget', () => {
   it('deletes by id prefix and by unique keyword, not by ambiguous keyword', async () => {
     const table = fakeTable([

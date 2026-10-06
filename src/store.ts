@@ -1,7 +1,7 @@
 /**
  * Memory persistence over the dsh storage domain: semantic-ish dedupe/merge,
- * workspace scoping, time-decayed confidence, keyword ranking, provenance,
- * and forget-by-id-or-keyword.
+ * conflict supersession, workspace scoping, time-decayed confidence, keyword
+ * ranking, provenance, and forget-by-id-or-keyword.
  * @module dsh-memory/store
  */
 
@@ -19,6 +19,8 @@ export interface MemoryRecord {
   confidence: number
   hits: number
   lastHitAt?: string
+  /** Set when a later memory supersedes this one; superseded rows never inject. */
+  supersededAt?: string
 }
 
 /** Normalized extraction candidate arriving from the LLM. */
@@ -31,6 +33,9 @@ export interface MemoryCandidate {
 export interface MergeContext {
   sessionId: string
   workspace?: string
+  /** Records just superseded this round: excluded from dedupe matching so a
+   * changed fact lands as a new row instead of reinforcing the stale one. */
+  excludeIds?: string[]
 }
 
 const KIND_RANK: Record<MemoryRecord['kind'], number> = { decision: 4, convention: 3, preference: 2, fact: 1 }
@@ -60,7 +65,7 @@ export class MemoryStore {
     for (const candidate of candidates) {
       const text = candidate.text.trim()
       if (text.length === 0) continue
-      const existing = this.findDuplicate(text, context.workspace)
+      const existing = this.findDuplicate(text, context.workspace, context.excludeIds)
       if (existing) {
         await this.table.put(existing.id, {
           ...existing,
@@ -98,6 +103,19 @@ export class MemoryStore {
     return updated
   }
 
+  /**
+   * Conflict adjudication: mark an outdated record as superseded (e.g. the
+   * deployment window moved). Superseded rows are excluded from injection but
+   * stay in the store for audit; they can still be forgotten explicitly.
+   */
+  async supersede(idPrefix: string): Promise<MemoryRecord | undefined> {
+    const record = this.all().find(m => m.id.startsWith(idPrefix))
+    if (!record || record.supersededAt) return record
+    const updated = { ...record, supersededAt: new Date().toISOString(), confidence: Math.min(record.confidence, 0.1) }
+    await this.table.put(record.id, updated)
+    return updated
+  }
+
   /** Time-decayed confidence: repeats keep a memory alive, silence fades it. */
   effective(record: MemoryRecord): number {
     const ageDays = (Date.now() - Date.parse(record.createdAt)) / 86_400_000
@@ -106,12 +124,15 @@ export class MemoryStore {
 
   /**
    * Injection ranking, scoped to one workspace (undefined-workspace records
-   * count as global). Score = effective confidence + 2x keyword overlap with
-   * the current query; memories with overlap always outrank pure-recency picks.
+   * count as global). Superseded records never inject. Score = effective
+   * confidence + 2x keyword overlap with the current query; memories with
+   * overlap always outrank pure-recency picks. `budgetChars` bounds the total
+   * injected text so the prompt section stays bounded regardless of counts.
    */
-  rankForInjection(max: number, query?: string, workspace?: string): MemoryRecord[] {
+  rankForInjection(max: number, query?: string, workspace?: string, budgetChars = 4000): MemoryRecord[] {
     const queryTerms = query ? tokenize(query) : undefined
-    const scoped = this.all().filter(record => record.workspace === undefined || record.workspace === workspace)
+    const scoped = this.all().filter(record => record.supersededAt === undefined)
+      .filter(record => record.workspace === undefined || record.workspace === workspace)
     const scored = scoped
       .map(record => ({ record, eff: this.effective(record) }))
       .filter(({ eff }) => eff >= MIN_EFFECTIVE)
@@ -124,7 +145,16 @@ export class MemoryStore {
       (b.overlap > 0 ? 1 : 0) - (a.overlap > 0 ? 1 : 0)
       || b.score - a.score
       || b.record.createdAt.localeCompare(a.record.createdAt))
-    return scored.slice(0, max).map(({ record }) => record)
+    const out: MemoryRecord[] = []
+    let used = 0
+    for (const { record } of scored) {
+      if (out.length >= max) break
+      const cost = record.text.length + 24
+      if (used > 0 && used + cost > budgetChars) continue
+      used += cost
+      out.push(record)
+    }
+    return out
   }
 
   /** Provenance tag for one record, e.g. "#a1b2c3d4 - 2026-10-05". */
@@ -160,10 +190,11 @@ export class MemoryStore {
   }
 
   /** Exact normalized-text match first, then rephrase detection via containment. */
-  private findDuplicate(text: string, workspace?: string): MemoryRecord | undefined {
+  private findDuplicate(text: string, workspace?: string, excludeIds?: string[]): MemoryRecord | undefined {
     const needle = normalizeText(text)
     const candidateTerms = tokenize(text)
     return this.all().find(record => {
+      if (excludeIds?.includes(record.id)) return false
       if ((record.workspace ?? undefined) !== (workspace ?? undefined)) return false
       if (normalizeText(record.text) === needle) return true
       const recordTerms = tokenize(record.text)
