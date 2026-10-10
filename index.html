@@ -42,15 +42,15 @@
         <pre>&gt; dsh "这个项目是什么？你怎么知道的？"
 
 本项目是厦门大学的期末工程。
-这**不是我从本次对话推出来的，而是来自
-跨会话记忆**——记忆条目 #c32400e3，
-沉淀于 2026-10-05。</pre>
+这不是我从本次对话推出来的——注入我系统提示的
+「项目长期记忆」段里有这一条：
+  [fact] 本项目是厦门大学的期末工程。（来源：#c32400e3 - 2026-10-05）</pre>
       </div>
     </div>
   </section>
 
   <section>
-    <h2>六项核心能力</h2>
+    <h2>八项核心能力</h2>
     <div class="features">
       <div class="feature"><h3>自动沉淀</h3><p>每轮结束自动用一次辅助 LLM 调用抽取决策、约定、偏好、事实；无需用户喊"记住"。</p></div>
       <div class="feature"><h3>语义去重</h3><p>词项包含度判定复述，"用中文回答"与"用户要求中文回答"合并为一条——重复即强化置信度。</p></div>
@@ -70,7 +70,7 @@
       <div class="arch-row"><span class="arch-tag">抽取</span><code>ctx.llm.stream()</code> 一次辅助调用输出 JSON 候选，不干扰 Agent 主循环</div>
       <div class="arch-row"><span class="arch-tag">存储</span><code>ctx.storageDomain</code> 官方存储域 <code>dsh_memory</code>，per-record JSON 后端，零自建依赖</div>
       <div class="arch-row"><span class="arch-tag">注入</span><code>agent/created</code> 时挂 <code>systemPrompt.section()</code>，按当前问题动态求值</div>
-      <div class="arch-row"><span class="arch-tag">管理</span><code>ctx.tools.register()</code> 暴露 memory_list / memory_forget / memory_extract</div>
+      <div class="arch-row"><span class="arch-tag">管理</span><code>ctx.tools.register()</code> 暴露 memory_list / memory_forget / memory_extract / memory_approve</div>
     </div>
   </section>
 
@@ -79,7 +79,7 @@
     <div class="term wide">
       <div class="term-bar"><i></i><i></i><i></i><span>bash</span></div>
       <pre>git clone https://github.com/ChenYueqi2024/dsh-memory && cd dsh-memory
-npm install && npm run build && npm test     # 24 个单元用例（dsh-commit 另有 7 个）
+npm install && npm run build && npm test     # 27 个单元用例（dsh-commit 另有 7 个）
 
 # 装入你的 profile（复制到 node_modules 并在 cordis.patch.yml 插入一行）
 # config: { provider: deepseek-official, model: deepseek-flash }</pre>
