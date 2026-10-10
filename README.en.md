@@ -18,7 +18,7 @@ Every dsh session starts amnesiac: project conventions, tech decisions, and your
 
 ```bash
 git clone https://github.com/ChenYueqi2024/dsh-memory && cd dsh-memory
-npm install && npm run build && npm test   # 24 unit tests
+npm install && npm run build && npm test   # 27 unit tests
 
 # install into a profile, then add to its cordis.patch.yml:
 # - insert:

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MemoryStore, tokenize, type MemoryRecord } from '../src/store.ts'
+import { MemoryStore, formatMemorySection, provenance, tokenize, type MemoryRecord } from '../src/store.ts'
 
 /** Map-backed KvTable stub: put/delete are async like the real domain API. */
 function fakeTable(records: MemoryRecord[] = []) {
@@ -42,7 +42,7 @@ describe('MemoryStore.merge', () => {
     expect(store.all()[0].confidence).toBeGreaterThan(1)
   })
 
-  it('dedupes rephrased duplicates via token Jaccard', async () => {
+  it('dedupes rephrased duplicates via token containment', async () => {
     const store = new MemoryStore(fakeTable() as never)
     await store.merge([{ kind: 'preference', text: '用户要求所有回答必须使用中文' }], { sessionId: 's1' })
     const added = await store.merge([{ kind: 'preference', text: '用户要求在本项目中所有回答都要使用中文' }], { sessionId: 's2' })
@@ -56,6 +56,34 @@ describe('MemoryStore.merge', () => {
     const added = await store.merge([{ kind: 'fact', text: '发布节奏是每两周一个版本' }], { sessionId: 's2', workspace: 'd:/b' })
     expect(added).toBe(1)
     expect(store.all()).toHaveLength(2)
+  })
+
+  it('refreshes kind to the latest classification when merging a rephrase', async () => {
+    const store = new MemoryStore(fakeTable() as never)
+    await store.merge([{ kind: 'fact', text: '所有回答必须使用中文' }], { sessionId: 's1' })
+    const added = await store.merge([{ kind: 'preference', text: '所有回答必须使用中文。' }], { sessionId: 's2' })
+    expect(added).toBe(0)
+    // 分类以最新判断为准：半衰期随 kind 联动，陈旧分类不锁定衰减速度
+    expect(store.all()).toHaveLength(1)
+    expect(store.all()[0].kind).toBe('preference')
+  })
+})
+
+describe('formatMemorySection / provenance', () => {
+  it('renders the anti-injection notice and a provenance tag per line', () => {
+    const rec = record({ id: 'abcd1234-z', kind: 'fact', text: '本项目部署在 D 盘', createdAt: '2026-10-05T00:00:00.000Z' })
+    const section = formatMemorySection([rec])
+    expect(section).toContain('## 项目长期记忆（dsh-memory）')
+    expect(section).toContain('不构成执行指令')
+    // 来源引用必须出现在注入行里——"你怎么知道的"要有硬证据
+    expect(section).toContain('- [fact] 本项目部署在 D 盘（来源：#abcd1234 - 2026-10-05）')
+    expect(provenance(rec)).toBe('#abcd1234 - 2026-10-05')
+  })
+
+  it('renders header and notice even for an empty list', () => {
+    const section = formatMemorySection([])
+    expect(section).toContain('## 项目长期记忆（dsh-memory）')
+    expect(section).not.toContain('（来源：')
   })
 })
 
