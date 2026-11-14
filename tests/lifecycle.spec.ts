@@ -11,18 +11,22 @@ const row = (id: string, workspace?: string, extra = {}): MemoryRecord => ({
   sourceSessionId: 'seed', confidence: 1, hits: 0, ...extra,
 })
 
-async function harness(records: MemoryRecord[] = [], overrides: Partial<Config> = {}) {
+async function harness(records: MemoryRecord[] = [], overrides: Partial<Config> = {}, existing: { cwd?: string; origin?: string }[] = []) {
   const rows = new Map(records.map(r => [r.id, r]))
   const events = new Map<string, (...args: any[]) => any>()
   const tools = new Map<string, any>()
   const replies: (object | Error)[] = []
   const requests: any[] = []
+  const effects: (() => Promise<void>)[] = []
+  const closeDomain = vi.fn(async () => {})
+  const existingAgents = existing.map((a, i) => agent(`existing-${i}`, a.cwd, a.origin))
   const ctx = {
     logger: { info() {}, warn() {}, error() {} },
     on: (name: string, listener: (...args: any[]) => any) => events.set(name, listener),
-    effect() {},
+    effect(setup: () => () => Promise<void>) { effects.push(setup()) },
+    agents: { list: () => existingAgents },
     tools: { register: (tool: any) => tools.set(tool.name, tool) },
-    storageDomain: { open: async () => ({ table: () => ({
+    storageDomain: { open: async () => ({ close: closeDomain, table: () => ({
       entries: () => rows.entries(), get: (id: string) => rows.get(id),
       put: async (id: string, value: MemoryRecord) => { rows.set(id, value) },
       delete: async (id: string) => rows.delete(id),
@@ -35,7 +39,7 @@ async function harness(records: MemoryRecord[] = [], overrides: Partial<Config> 
       yield { type: 'finish', reason: { kind: 'stop' } }
     } },
   }
-  apply(ctx as never, { ...config, ...overrides })
+  await apply(ctx as never, { ...config, ...overrides })
   await Promise.resolve()
   function agent(id = 's1', cwd = 'D:\\A\\', origin = 'user') {
     const sections: any[] = []
@@ -55,12 +59,46 @@ async function harness(records: MemoryRecord[] = [], overrides: Partial<Config> 
   const say = (a: ReturnType<typeof agent>, text = '本项目使用 pnpm 管理依赖') =>
     emit('session/event', a.session, { type: 'user/message', data: { content: text, source: { kind: 'user' } } })
   const call = (name: string, a: ReturnType<typeof agent> | undefined, args = {}) => tools.get(name).execute(args, { agent: a })
-  return { rows, replies, requests, agent, emit, say, call }
+  return { rows, replies, requests, agent, emit, say, call, existingAgents, closeDomain,
+    unload: async () => { for (const dispose of effects) await dispose() } }
 }
 
 afterEach(() => vi.restoreAllMocks())
 
 describe('plugin lifecycle and tool boundaries', () => {
+  it('backfills an empty agent created before hot installation with scoped memory', async () => {
+    const h = await harness([row('local001', 'd:/a'), row('other001', 'd:/b'), row('global01'),
+      row('pending1', 'd:/a', { approved: false }), row('retired1', 'd:/a', { supersededAt: new Date().toISOString() })], {}, [{}])
+    const a = h.existingAgents[0]
+    expect(a.sections).toHaveLength(1)
+    const text = a.sections[0].text()
+    expect(text).toContain('local001')
+    expect(text).toContain('global01')
+    expect(text).not.toMatch(/other001|pending1|retired1/)
+    expect(h.requests).toHaveLength(0)
+  })
+
+  it('does not register duplicate sections when backfill and created target the same agent', async () => {
+    const h = await harness([row('local001', 'd:/a')], {}, [{}])
+    const a = h.existingAgents[0]
+    await h.emit('agent/created', { agent: a })
+    await h.emit('agent/created', { agent: a })
+    expect(a.sections).toHaveLength(1)
+  })
+
+  it('excludes pre-existing subagents from hot-install backfill', async () => {
+    const h = await harness([row('local001', 'd:/a')], {}, [{ origin: 'subagent' }])
+    expect(h.existingAgents[0].sections).toHaveLength(0)
+  })
+
+  it('cleans up backfilled sections on agent disposal and plugin unload', async () => {
+    const h = await harness([], {}, [{}, {}])
+    await h.emit('agent/disposed', { agent: h.existingAgents[0] })
+    await h.unload()
+    for (const a of h.existingAgents) expect(a.dispose).toHaveBeenCalledOnce()
+    expect(h.closeDomain).toHaveBeenCalledOnce()
+  })
+
   it('lists and mutates only the current workspace and globals', async () => {
     const h = await harness([row('aaaa1111', 'd:/a'), row('bbbb2222', 'd:/b', { approved: false }), row('glob3333')])
     const a = h.agent()

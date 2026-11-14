@@ -4,7 +4,7 @@
 
 **Cross-session project memory for [DeepSeek Harness (dsh)](https://github.com/deepseek-ai/deepseek-harness)** — a native Cordis plugin (MIT).
 
-Current source: **v0.5.0**. See the [release](https://github.com/ChenYueqi2024/dsh-memory/releases/tag/v0.5.0) and its commit's GitHub Actions checks for publication status. The paid-model study and existing operations recording belong to **v0.4.1** and do not evaluate the new retention feature.
+Current version: **v0.5.1**. Hot installation now attaches memory injection to existing Agents, and unloading closes the storage domain for reactivation. See the [v0.5.1 release](https://github.com/ChenYueqi2024/dsh-memory/releases/tag/v0.5.1). The paid-model study belongs to **v0.4.1**; it does not evaluate this fix. See [hot-install validation](docs/hot-install-validation.md).
 
 Every dsh session starts amnesiac: project conventions, tech decisions, and your preferences must be restated each time, or hand-maintained in AGENTS.md files. dsh-memory gives the agent durable project memory instead:
 
@@ -21,7 +21,7 @@ Every dsh session starts amnesiac: project conventions, tech decisions, and your
 
 ```bash
 git clone https://github.com/ChenYueqi2024/dsh-memory && cd dsh-memory
-npm ci && npm test   # prepare builds automatically; 54 automated tests
+npm ci && npm test   # prepare builds automatically; 58 automated tests
 
 # install into a profile, then add to its cordis.patch.yml:
 # - insert:

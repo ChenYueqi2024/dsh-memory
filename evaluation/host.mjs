@@ -20,6 +20,7 @@ export async function bootMemory(host, { pluginPath, storage, workspaceRoot, req
   const agent = key => ({ ctx, session: { id: crypto.randomUUID(), header: { cwd: workspace(key), origin: 'user' } } })
   try {
     ctx.provide('tools', { register: tool => tools.set(tool.name, tool) })
+    ctx.provide('agents', { list: () => [] })
     ctx.provide('systemPrompt', { section: section => sections.push(section) })
     ctx.provide('llm', { async *stream(options) {
       const messages = [{ role: 'system', content: options.system }, ...options.messages.map(message => ({

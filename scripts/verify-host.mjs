@@ -27,6 +27,7 @@ async function boot(replies = []) {
   const calls = []
   try {
     ctx.provide('tools', { register: tool => { tools.set(tool.name, tool) } })
+    ctx.provide('agents', { list: () => [] })
     ctx.provide('llm', { async *stream(options) {
       calls.push(options)
       assert.ok(replies.length, 'unexpected LLM request')

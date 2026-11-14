@@ -7,7 +7,7 @@
 
 给 [DeepSeek Harness（dsh）](https://github.com/deepseek-ai/deepseek-harness)装上**跨会话项目记忆**的原生插件。
 
-当前源码版本 **v0.5.0**：增加用户指定的持久记忆。下方真实模型评测与既有操作录像均来自 **v0.4.1**，不作为新增功能的效果或成本证据。发布状态见 [Release](https://github.com/ChenYueqi2024/dsh-memory/releases/tag/v0.5.0)，对应提交的检查见 GitHub Actions。
+当前版本 **v0.5.1**：热安装时为已有 Agent 补挂记忆注入，避免复用已有空会话时漏注入；卸载时关闭存储域，支持重新启用。版本与附件见 [v0.5.1 Release](https://github.com/ChenYueqi2024/dsh-memory/releases/tag/v0.5.1)。下方真实模型评测来自 **v0.4.1**，不作为新修复的效果或成本证据。[热安装验证说明](docs/hot-install-validation.md) 单独记录回归证据。
 
 dsh 的每次会话都是失忆的：项目约定、技术决策、用户偏好要么靠人工维护 AGENTS.md，要么每次重新交代。dsh-memory 让 Agent 在对话中**自动沉淀**值得记住的信息，并在未来的会话里**自动想起**。
 
@@ -107,10 +107,12 @@ dsh --profile <name> "这个项目用什么包管理器？你怎么知道的？"
 ## 测试
 
 ```bash
-npm test        # vitest，54 个用例：存储/解析 + 插件入口、工具执行、抽取与生命周期接线
+npm test        # vitest，58 个用例：存储/解析 + 插件入口、工具执行、抽取与生命周期接线
 ```
 
 生命周期测试仅替代宿主注册/schema/LLM 分块边界，其余运行生产代码，无需 API key。真实宿主验证另运行：
+
+热安装回归使用真实 AgentRegistry、AgentLoop、SystemPrompt 和 JSON 后端：`node scripts/verify-hot-install.mjs dist/index.js <全新的验证目录>`，从安装前已有空 Agent 开始，验证补挂、隔离、新 Agent、卸载和重载，不调用真实模型。
 
 ```bash
 node scripts/verify-host.mjs <隔离profile目录> <安装了dsh的目录> <全新的测试存储目录>

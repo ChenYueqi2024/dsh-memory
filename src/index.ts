@@ -11,6 +11,7 @@
 
 import { appendFileSync } from 'node:fs'
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-agent'
 import z from '@deepseek-ai/schemastery'
 import { defineDomain } from '@deepseek-ai/dsh-storage-domain'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
@@ -21,7 +22,7 @@ import type { ExistingMemory } from './extractor.ts'
 import { extractMemories, TranscriptBuffer } from './extractor.ts'
 
 export const name = 'dsh-memory'
-export const inject = ['llm', 'tools', 'storageDomain'] as const
+export const inject = ['llm', 'tools', 'storageDomain', 'agents'] as const
 
 /** dsh-memory plugin configuration. */
 export interface Config {
@@ -82,7 +83,7 @@ const memoryDomain = defineDomain({
   },
 })
 
-export function apply(ctx: Context, config: Config): void {
+export async function apply(ctx: Context, config: Config): Promise<void> {
   const log = ctx.logger.bind?.('dsh-memory') ?? ctx.logger
   let store: MemoryStore | undefined
   const transcripts = new Map<string, TranscriptBuffer>()
@@ -97,6 +98,7 @@ export function apply(ctx: Context, config: Config): void {
   const ready = (async () => {
     const domain: Domain<typeof memoryDomain> = await ctx.storageDomain.open(memoryDomain)
     store = new MemoryStore(domain.table('memories'))
+    return domain
   })()
   ready.catch(error => log.error(`dsh-memory: storage open failed: ${error instanceof Error ? error.message : String(error)}`))
 
@@ -156,28 +158,33 @@ export function apply(ctx: Context, config: Config): void {
     await settle('turn-end', sessionId, buffer, workspaces.get(sessionId))
   })
 
-  // ── 2. 注入：新 agent 创建时把相关记忆写进 system prompt ───────────────
+  // ── 2. 注入：覆盖新 agent，以及热安装前已存在的空会话 ─────────────────
   const promptFibers = new Map<object, { dispose(): Promise<void> }>()
-  ctx.on('agent/created', async ({ agent }: { agent: any }) => {
+  async function attachPrompt(agent: any): Promise<void> {
     if (agent?.session?.header?.origin === 'subagent') return
-    const fiber = agent.ctx.inject(['systemPrompt'], (scope: any) => {
-      scope.systemPrompt.section({
-        name: 'context:dsh-memory',
-        order: 4500,
-        text: () => {
-          if (!store) return ''
-          const workspace = normalizeWorkspace(agent.session?.header?.cwd)
-          const memories = store.rankForInjection(config.injectMax, latestQuery.get(agent.session.id), workspace)
-          if (memories.length === 0) return ''
-          for (const m of memories) store.markHit(m.id)
-          const section = formatMemorySection(memories)
-          debugLog(`inject(${agent.session?.id}): ${section.replace(/\n/g, ' | ')}`)
-          return section
-        },
+    if (!promptFibers.has(agent)) {
+      const fiber = agent.ctx.inject(['systemPrompt'], (scope: any) => {
+        scope.systemPrompt.section({
+          name: 'context:dsh-memory',
+          order: 4500,
+          text: () => {
+            if (!store) return ''
+            const workspace = normalizeWorkspace(agent.session?.header?.cwd)
+            const memories = store.rankForInjection(config.injectMax, latestQuery.get(agent.session.id), workspace)
+            if (memories.length === 0) return ''
+            for (const m of memories) store.markHit(m.id)
+            const section = formatMemorySection(memories)
+            debugLog(`inject(${agent.session?.id}): ${section.replace(/\n/g, ' | ')}`)
+            return section
+          },
+        })
       })
-    })
-    promptFibers.set(agent, fiber)
-  })
+      promptFibers.set(agent, fiber)
+    }
+    await ready
+    await promptFibers.get(agent)
+  }
+  ctx.on('agent/created', ({ agent }: { agent: any }) => attachPrompt(agent))
   ctx.on('agent/disposed', ({ agent }: { agent: object }) => {
     promptFibers.get(agent)?.dispose().catch(() => {})
     promptFibers.delete(agent)
@@ -388,7 +395,15 @@ export function apply(ctx: Context, config: Config): void {
   ctx.effect(() => async () => {
     for (const fiber of promptFibers.values()) await fiber.dispose().catch(() => {})
     promptFibers.clear()
+    await Promise.allSettled(inFlight.values())
+    const domain = await ready
+    store = undefined
+    await domain.close()
   }, 'dsh-memory: prompt fibers')
+  // Subscribe first so agents created during backfill cannot be missed. Await
+  // storage and registration before the host reports this plugin as loaded.
+  await ready
+  await Promise.all(ctx.agents.list().map(attachPrompt))
 }
 
 function debugLog(line: string): void {
