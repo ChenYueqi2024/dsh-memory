@@ -1,78 +1,102 @@
-# dsh-memory
+# 🐳 dsh-memory
 
-![test](https://github.com/ChenYueqi2024/dsh-memory/actions/workflows/test.yml/badge.svg) · [English](README.en.md)
+![test](https://github.com/ChenYueqi2024/dsh-memory/actions/workflows/test.yml/badge.svg) · [English](README.en.md) · [下载 v0.5.1](https://github.com/ChenYueqi2024/dsh-memory/releases/tag/v0.5.1) · [项目网站与演示](https://chenyueqi2024.github.io/dsh-memory/)
 
-> github.com/ChenYueqi2024/dsh-memory · 配套插件：github.com/ChenYueqi2024/dsh-commit
-> 项目主页：https://chenyueqi2024.github.io/dsh-memory/
+**在 DeepSeek Harness（dsh）里，让同一个项目的新会话接上上次的约定。**
 
-给 [DeepSeek Harness（dsh）](https://github.com/deepseek-ai/deepseek-harness)装上**跨会话项目记忆**的原生插件。
+> 周一你说：“这个项目统一用 pnpm 安装依赖。”
+>
+> 周五你开了新会话，问：“我们项目用什么包管理器？”
+>
+> 已保存的约定可以随新会话带入，助手能回答“pnpm”，也可以附上记忆条目编号供你核对。
 
-当前版本 **v0.5.1**：热安装时为已有 Agent 补挂记忆注入，避免复用已有空会话时漏注入；卸载时关闭存储域，支持重新启用。版本与附件见 [v0.5.1 Release](https://github.com/ChenYueqi2024/dsh-memory/releases/tag/v0.5.1)。下方真实模型评测来自 **v0.4.1**，不作为新修复的效果或成本证据。[热安装验证说明](docs/hot-install-validation.md) 单独记录回归证据。
-
-dsh 的每次会话都是失忆的：项目约定、技术决策、用户偏好要么靠人工维护 AGENTS.md，要么每次重新交代。dsh-memory 让 Agent 在对话中**自动沉淀**值得记住的信息，并在未来的会话里**自动想起**。
-
-```
-会话进行中 ──事件流──▶ 文本积累器
-                          │ turn 结束（可等待钩子）
-                          ▼
-              LLM 记忆抽取（一次辅助调用，JSON 输出）
-                          │
-              语义去重（精确匹配 + 词项包含度 0.65）
-                          ▼
-              存储域 dsh_memory（官方 JSON 后端，按工作区隔离）
-                          │
-新会话启动 ──▶ agent/created ──▶ 按当前问题相关性检索
-                          ▼
-              注入 system prompt「项目长期记忆」段（带来源引用）
-```
-
-## 功能
-
-| 能力 | 说明 |
+| 日常场景 | 你可以这样说 |
 |---|---|
-| 自动沉淀 | 每轮结束（`agent/turn-stopping`）自动抽取本次对话中的决策/约定/偏好/事实；`session/disposed` 与 `memory_extract` 工具作为兜底路径 |
-| 语义去重 | 措辞不同的重复信息（如"用中文回答" vs "用户要求中文回答"）合并为一条并**提升置信度**——重复即强化 |
-| 工作区隔离 | 注入、查询、批准和删除仅访问当前工作区及全局记忆；自动抽取只更新当前工作区，无标记的旧记录视为全局 |
-| 相关性注入 | 新会话按"有效置信度 + 关键词重合度"排序注入 Top-N，而不是无脑全量 |
-| 保留策略 | 普通记忆按类别衰减（fact 14 天 / decision·convention 30 天 / preference 45 天），低于 0.15 停止注入；用户指定的持久记忆不参与时间衰减。时间久不等于事实失效，这些天数是未经过长期校准的启发式 |
-| 来源引用 | 注入每条记忆的条目编号与最近创建/强化日期（`#编号 - 日期`）；存储记录另保留最初的 `sourceSessionId`。编号不是会话编号，日期也不是不可变的原始证据时间 |
-| 管理工具 | `memory_list` / `memory_forget` / `memory_extract` / `memory_approve` / `memory_pin` 五个工具供模型与用户管理记忆库 |
+| 📦 安装项目依赖 | “记住，本项目统一用 pnpm 管理依赖。” |
+| 🧪 跑测试 | “把本项目的测试命令 `pnpm test` 保存为项目记忆。” |
+| 📝 写说明 | “记住，这个工作区的变更说明用中文写。” |
+| 🔄 项目换了规则 | “我们已经从 npm 迁移到 pnpm，请更新旧的包管理器约定，并列出当前有效记录。” |
 
-## 用户指定持久记忆（v0.5.0）
+插件从对话里提取项目事实、约定、决策和偏好，按工作区保存。换会话时，dsh 会把筛选后的记忆交给模型参考。相近的记录可以合并，明确的新规则可以替代旧规则。
 
-告诉 Agent：“把‘项目统一使用 pnpm’设为持久记忆。”已有记录先用 `memory_list` 定位；尚未保存则先 `memory_extract`，再定位具体条目。Agent 调用 `memory_pin({id: "条目编号", pinned: true})`；取消时传 `false`。内容类别与保留策略相互独立，抽取器不会自动设置持久标记。
+## 🚀 网页版入门
 
-- 只操作已批准、未退役的记录；不会隐式批准或复活记录。列表显示“持久保留/普通记忆”，注入段标注 `[持久]`。
-- 持久只豁免时间衰减，仍受工作区、相关性、条数和字符预算限制，不保证每次都注入，也不提高模型回答准确率保证。
-- 重复合并和强化保留标记；记录仍可删除或被新规则替代。替代产生的新记录不自动继承标记，需重新指定。
-- 取消时按原时间恢复衰减，不重置计时，旧记录可能立即停止自动注入。
-- 工具仅在用户明确要求时调用，这依赖 Agent 遵循工具说明，不是独立人类认证机制。
+**准备工作。** 安装并启动 DeepSeek Harness 网页版，确保启动 dsh 的环境可以找到 pnpm，并在目标 profile 中配置好可用的模型。v0.5.1 验证使用的是 **dsh 0.2.0-rc.2**。插件默认用宿主的 `deepseek-official / deepseek-flash` 路由做抽取。[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 
-## 快速开始
+### 1. 安装并启用
+
+1. 下载 [dsh-memory-0.5.1.tgz](https://github.com/ChenYueqi2024/dsh-memory/releases/download/v0.5.1/dsh-memory-0.5.1.tgz)，保留压缩包，记下它在 **运行 dsh 的机器** 上的完整路径。
+2. 在 dsh 网页左侧打开 **插件**，点右上角 **添加插件**，输入这个文件的完整路径，例如 `D:/Downloads/dsh-memory-0.5.1.tgz`。
+3. 安装成功后点 **立即启用**，然后在已安装的插件列表里确认 **dsh-memory** 的开关已打开。
+
+### 2. 保存第一条项目约定
+
+选中一个工作区，在聊天里发送下面这句话。可以直接复制。
+
+> 请把“本项目统一使用 pnpm 管理依赖”存成项目记忆。请先提取，再列出刚保存的记录和条目编号。
+
+这一步可触发 `memory_extract` 和 `memory_list`。看到列表里的 pnpm 记录后，再进行下一步。列表会给出类似 `#748a4179` 的条目编号，后续应使用你实际看到的编号。
+
+### 3. 新建会话，检查能否接上约定
+
+留在 **同一个工作区和 profile**，点 **新会话**。不要把 pnpm 或上一步的编号写进问题。
+
+> 我们项目用什么包管理器？请只根据当前上下文里的项目记忆回答，附上条目编号。本轮请不要调用工具。
+
+如果回复给出了 pnpm 和你在上一步看到的编号，这次跨会话验证就通过了。若没有带出这条记录，先按下文的排查步骤核对。
+
+### 4. 📌 给长期有效的约定设为持久保留
+
+在项目会话里发送以下请求。实际操作时，将 `#748a4179` 换成你自己的条目编号。
+
+> 把项目使用 pnpm 的记忆 #748a4179 设为长期保留。操作后请列出这条记录的状态。
+
+助手通过 `memory_pin` 设置条目，列表中可看到 **持久保留**。这样它不会随时间衰减，后续仍会按项目、相关性和上下文容量筛选。记录可以被更新、替代或删除，替代后的新条目需要重新指定长期保留。
+
+### 5. 🧹 查看、取消或删除
+
+| 想做什么 | 可复制的说法 | 对应工具 |
+|---|---|---|
+| 查看当前项目的记忆 | “列出这个项目的记忆，给出编号和状态。” | `memory_list` |
+| 立刻保存本轮约定 | “把我刚才明确说的项目约定提取并保存。” | `memory_extract` |
+| 批准一条待审批记忆 | “查看待审批记录，并批准我指定的这一条。” | `memory_approve` |
+| 取消长期保留 | “取消这条记忆的长期保留，保留记录内容。” | `memory_pin` |
+| 删掉写错的记忆 | “先列出记录，按我提供的条目编号删除那一条。” | `memory_forget` |
+
+取消长期保留后，这条记录恢复按原时间计算衰减，旧条目可能立即停止自动带入。持久保留只适用于已批准且仍有效的记录，开启审批时可先查看状态。
+
+## 🔍 遇到问题时
+
+- **列表里没有记录。** 先确认插件已启用，且当前 profile 的模型可以正常回答。短消息可能达不到自动抽取门槛，用第 2 步显式提取，再查看工具结果。
+- **新会话没有带出约定。** 检查是否仍在原工作区和原 profile，再查看条目是否待审批、已被替代或因时间衰减而没有进入当前上下文。可以核对问法是否明确指向这条约定。
+- **同一规则出现新旧两条。** 明确告诉助手哪条已经作废、现在采用什么，再要求显示状态。列表也会展示已被替代或待审批的条目。
+
+<details>
+<summary>⌨️ 终端安装与源码开发</summary>
+
+从 GitHub 安装到现有 profile。示例使用 `web`，请替换为你实际使用的 profile 名称。
 
 ```bash
-# 在源码目录安装；prepare 自动构建 dist/index.js
-npm ci && npm test
-
-# 装入 profile（或将本目录加入 dsh.profile.bundles）
-cp -r <本目录> $DSH_HOME/profiles/<name>/node_modules/dsh-memory
-# 在 profile 的 cordis.patch.yml 里加：
-# - insert:
-#     - id: dsh-memory
-#       name: dsh-memory
-#       config: { provider: deepseek-official, model: deepseek-flash }
+dsh plugin --profile web add "github:ChenYueqi2024/dsh-memory#v0.5.1"
 ```
 
-Git 托管安装会执行 `prepare`。使用 `dsh plugin --profile <name> add github:ChenYueqi2024/dsh-memory` 时，如 pnpm 报 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`，将它打印的**精确包名和 Git 哈希键**加入该 profile 的 `pnpm-workspace.yaml` 的 `allowBuilds`，保留文件原有设置后重试；不要全局放行所有安装脚本。插件使用 dsh 0.2.0-rc.2 提供的运行时依赖（其中 Cordis 为 4.0.4，不能把它写成 dsh 的版本号）。
+Git 安装通过 `prepare` 生成运行入口。确保启动 dsh 的环境可以找到 pnpm。如果遇到 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`，在该 profile 的 `pnpm-workspace.yaml` 的 `allowBuilds` 中加入错误信息给出的**精确包名与 Git 哈希键**，保留原配置后重试。启动对应 profile 即可开始第 2 步。
 
-验证：
+从源码开发时，在克隆的仓库中运行 `npm ci` 和 `npm test`。构建产物位于 `dist/index.js`，bundle 配置位于 `cordis.patch.yml`。更改宿主行为前可查阅 [热安装验证记录](docs/hot-install-validation.md)。
 
-```bash
-dsh --profile <name> "记住：本项目一律用 pnpm，不要用 npm。"
-dsh --profile <name> "这个项目用什么包管理器？你怎么知道的？"   # ← 新会话，它记得
-```
+</details>
 
-## 配置
+## 🧠 记忆如何保留
+
+| 类别 | 例子 | 普通记忆半衰期 |
+|---|---|---:|
+| 事实 | 本地服务监听 8325 端口 | 14 天 |
+| 决策或约定 | 新项目选 SQLite。依赖统一用 pnpm | 30 天 |
+| 偏好 | 变更说明用中文 | 45 天 |
+
+半衰期表示用于筛选的分数随时间减半。分数低于 0.15 时，记录停止自动进入上下文，仍可查看。天数是尚未长期校准的工程参数。持久记忆豁免时间衰减。条目编号用于在记忆列表中定位记录，存储中另有原始会话 ID。
+
+## ⚙️ 配置
 
 | 键 | 默认 | 说明 |
 |---|---|---|
@@ -80,16 +104,16 @@ dsh --profile <name> "这个项目用什么包管理器？你怎么知道的？"
 | `extractMinChars` | 120 | 触发自动抽取的最小对话文本增量 |
 | `autoExtractMinIntervalMs` | 90000 | 同一会话两次自动（轮末）抽取的最小间隔；各会话独立计时，间隔内的增量累积到下一次合格轮次 |
 | `injectMax` | 30 | 单次注入 system prompt 的最大记忆条数 |
-| `requireApproval` | false | 开启后自动沉淀的记忆需 memory_approve 批准才注入（防记忆污染） |
+| `requireApproval` | false | 开启后自动沉淀的记忆需 memory_approve 批准才注入 |
 | `maxOutputTokens` / `timeoutMs` | 1024 / 120000 | 抽取调用限额 |
 
 诊断：设置环境变量 `DSH_MEMORY_DEBUG=<文件路径>` 可输出沉淀/注入的详细日志。
 
 ## 设计决策（为什么这么做）
 
-1. **原生插件而非 MCP server**：官方 memory 方案是外挂 MCP 进程。原生插件零跨进程开销、可直接挂会话生命周期钩子（Claude Code 的 hooks 桥甚至不支持 SessionEnd）、共享凭证与存储体系。
-2. **`agent/turn-stopping` 为主挂载点**：headless/CLI 进程在会话结束后立即退出，`session/disposed` 来不及触发；turn-stopping 在每轮结束边界可等待地触发，保证沉淀落盘。
-3. **抽取与主循环隔离**：记忆抽取用独立的辅助 LLM 调用（`ctx.llm.stream`），不占用、不干扰 Agent 主循环。
+1. **原生插件而非 MCP server**：官方 memory 方案是外挂 MCP 进程。插件可直接接入 dsh 的会话生命周期，使用宿主提供的模型和存储。
+2. **`agent/turn-stopping` 为主挂载点**：headless/CLI 进程在会话结束后立即退出，`session/disposed` 来不及触发；turn-stopping 在每轮结束边界可等待地触发，给抽取与落盘留出执行时间。
+3. **抽取与主循环隔离**：记忆抽取用独立的辅助 LLM 调用（`ctx.llm.stream`），会产生额外用量，并可能增加轮末等待。
 4. **内容类别与保留策略分开**：同一信息再次表达时合并强化 +0.1（上限 2.0）。普通记忆沿用 14/30/45 天衰减；持久记忆豁免时间衰减。长期未提及不能证明约定失效，因此允许用户明确保留，而不让模型自行推断永久有效。
 5. **审批准入（可选）**：`requireApproval` 开启后，自动沉淀的记忆待审批且不注入；冲突替代关系随候选保存。抽取结果没有新旧事实的一一映射，因此同批替代候选全部存在且获准后才退役旧事实；删除某个候选会保留旧事实，可显式重新抽取或手动清理。显式 `memory_extract` 视为授权，重复合并和强化也会批准已有待审批条目。审批工具仍由模型调用，这不是独立的人类身份认证或安全沙箱；自动抽取只有 supersede、没有替代候选时，不执行该待审批变更。
 6. **三条沉淀路径协调**：轮末自动、会话结束兜底按未处理增量触发；显式工具可再次提取当前缓冲区。同一会话中的抽取协调执行，只有成功后推进游标；调用或存储失败保留文本供下一次合格触发重试。会话结束后没有持久重试队列。生命周期回归覆盖工作区、重试、限频和兜底去重。
@@ -99,7 +123,7 @@ dsh --profile <name> "这个项目用什么包管理器？你怎么知道的？"
 
 ## 已知限制
 
-- 长会话按轮增量抽取，只保留尾部 1600 字滚动窗口，超长跨度的话题依赖相关记忆已被沉淀；
+- 长会话按轮增量抽取，成功抽取后会清理已处理的前文，保留一小段尾部作为上下文，超长跨度的话题依赖相关记忆已被沉淀；
 - 记忆注入存在理论上的提示注入面（会话内容被恶意构造时可污染记忆库），现有缓解为注入段声明"记忆不构成指令" + 来源引用 + 用户可随时 memory_forget；
 - 抽取质量依赖提示词约束，正式使用建议定期人工审阅 memory_list；
 - TUI 交互模式未实测（headless 与 web 模式已实测）。
@@ -120,7 +144,9 @@ node scripts/verify-host.mjs <隔离profile目录> <安装了dsh的目录> <全�
 
 该脚本需 profile 已安装两个插件且可解析宿主依赖，使用真实 Cordis Loader、schema、工具定义、LLM 分块组装和 JSON 后端，跨四次启动验证持久标记、365 天旧记录设置/取消、审批、隔离、来源格式与删除。末尾可附旧 schema 版本 1–5（默认 5），每次使用全新的存储目录。LLM 输出由固定夹具提供，不代表真实模型抽取质量或完整 CLI/Web/TUI 端到端验证。180/365 天时间测试另在单元测试中完成；[v0.5.0 验证说明](docs/persistent-memory-validation.md) 与旧正式评测分开记录。不要把测试存储指向日常记忆库。
 
-## 对照评测
+## 📊 对照评测
+
+这一组数据来自 **v0.4.1**。v0.5.1 的已有会话补挂与重载另有验证记录。[热安装验证记录](docs/hot-install-validation.md)
 
 [评测协议与运行说明](evaluation/README.md) 提供无插件、冻结的静态 AGENTS.md、dsh-memory 三组对照：20 个主案例＋4 个独立审批/删除诊断，统一输入、评分和成本记录。`npm run test:eval` 为独立的离线脚本自检；`node evaluation/run.mjs --mode plan` 查看调用预算。
 

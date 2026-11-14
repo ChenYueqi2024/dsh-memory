@@ -1,4 +1,4 @@
-# dsh-memory
+# 🐳 dsh-memory
 
 [![test](https://github.com/ChenYueqi2024/dsh-memory/actions/workflows/test.yml/badge.svg)](https://github.com/ChenYueqi2024/dsh-memory/actions/workflows/test.yml)
 
@@ -6,9 +6,9 @@
 
 Current version: **v0.5.1**. Hot installation now attaches memory injection to existing Agents, and unloading closes the storage domain for reactivation. See the [v0.5.1 release](https://github.com/ChenYueqi2024/dsh-memory/releases/tag/v0.5.1). The paid-model study belongs to **v0.4.1**; it does not evaluate this fix. See [hot-install validation](docs/hot-install-validation.md).
 
-Every dsh session starts amnesiac: project conventions, tech decisions, and your preferences must be restated each time, or hand-maintained in AGENTS.md files. dsh-memory gives the agent durable project memory instead:
+On Monday, tell dsh that your project uses pnpm. On Friday, open a new chat in the same workspace and ask which package manager to use. A saved convention can carry over, and the memory ID lets you find the record. You can also save a test command or the team's preference for change notes.
 
-- **Auto-sedimentation** — at each turn boundary (`agent/turn-stopping`), one auxiliary LLM call extracts durable facts/decisions/conventions/preferences from the conversation (JSON contract, no impact on the main agent loop).
+- **Auto-sedimentation** — at eligible turn boundaries (`agent/turn-stopping`), an auxiliary LLM call extracts durable facts/decisions/conventions/preferences from the conversation (JSON output, with additional token usage and possible turn-end latency).
 - **Semantic dedupe + conflict adjudication** — rephrased duplicates reinforce the original row; when new information overturns an old memory, the LLM emits `supersede` and the stale row is retired (kept for audit, never injected again).
 - **Workspace scoping** — injection and management tools see the current workspace plus globals; extraction modifies only the current workspace. Missing-session and subagent tool calls are rejected.
 - **Relevance-ranked injection** — ordinary memories use per-kind half-life decay (facts 14d, decisions/conventions 30d, preferences 45d) + keyword overlap, bounded by a character budget. These durations are engineering heuristics, not calibrated optima.
@@ -17,27 +17,23 @@ Every dsh session starts amnesiac: project conventions, tech decisions, and your
 
 > The plugin ships **no API key**: extraction runs through the host dsh instance's own model route and credentials — you consume your own tokens. Override `provider`/`model` in the patch config to match your setup.
 
-## Quick start
+## 🚀 Quick start in the web app
+
+Start a DeepSeek Harness web profile with a working model route and make sure pnpm is on the PATH used by dsh. The v0.5.1 walkthrough was verified with **dsh 0.2.0-rc.2**.
+
+1. **Install.** Download [dsh-memory-0.5.1.tgz](https://github.com/ChenYueqi2024/dsh-memory/releases/download/v0.5.1/dsh-memory-0.5.1.tgz) to the machine running dsh. In the web app, open **Plugins**, choose **Add plugin**, and enter the absolute path to the archive.
+2. **Enable.** Enable dsh-memory after the installation completes, then select your project workspace.
+3. **Save.** Send “Save this project convention: we use pnpm to manage dependencies. Then list the saved record and its memory ID.” Confirm that the entry appears in the list.
+4. **Verify in a new chat.** Stay in the same workspace and profile. Ask “Which package manager does this project use? Answer using the project memory in your context, cite its memory ID, and do not call tools.” Check that the answer cites the saved entry.
+5. **Manage.** Ask to keep the convention persistently, using the ID from the list. You can also ask to cancel persistent retention while keeping the entry, or explicitly delete it by ID.
+
+For terminal installation into an existing profile, replace `web` with your profile name:
 
 ```bash
-git clone https://github.com/ChenYueqi2024/dsh-memory && cd dsh-memory
-npm ci && npm test   # prepare builds automatically; 58 automated tests
-
-# install into a profile, then add to its cordis.patch.yml:
-# - insert:
-#     - id: dsh-memory
-#       name: dsh-memory
-#       config: { provider: deepseek-official, model: deepseek-flash }
+dsh plugin --profile web add "github:ChenYueqi2024/dsh-memory#v0.5.1"
 ```
 
-Verify:
-
-```bash
-dsh --profile <name> "Remember: this project always uses pnpm, never npm."
-dsh --profile <name> "What package manager does this project use? How do you know?"   # ← new session, it remembers
-```
-
-Full documentation (config, design decisions, architecture): see [README.md](README.md) (Chinese).
+More examples, troubleshooting, and configuration are available in the [Chinese README](README.md).
 
 Git installs build through `prepare`. If pnpm reports `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`, add only its exact package-and-commit key to the profile's `allowBuilds`, preserving existing settings, then retry. Runtime peers come from dsh 0.2.0-rc.2 (Cordis itself is 4.0.4).
 
