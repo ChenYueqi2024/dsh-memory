@@ -1,0 +1,67 @@
+{
+  "pass": true,
+  "entryId": "c2a8ef55-ab2f-4a21-8c48-f57f39455ca7",
+  "steps": [
+    {
+      "label": "01 记住：保存项目约定",
+      "sessionId": "session-f0ab0ec2-7495-4488-bb6e-bdfc07767e8f",
+      "exitCode": 0,
+      "memoryCount": 1,
+      "tools": [
+        {
+          "name": "memory_extract",
+          "arguments": "{}"
+        }
+      ]
+    },
+    {
+      "label": "02 查看：找到记忆编号",
+      "sessionId": "session-1f5c32bb-56c6-4678-8c5d-545744bff052",
+      "exitCode": 0,
+      "memoryCount": 1,
+      "tools": [
+        {
+          "name": "memory_list",
+          "arguments": "{}"
+        }
+      ]
+    },
+    {
+      "label": "03 全新会话：自动召回",
+      "sessionId": "session-a2fbc171-be0f-47ac-9d62-dd9f393b56b7",
+      "exitCode": 0,
+      "memoryCount": 1,
+      "tools": []
+    },
+    {
+      "label": "04 删除：撤回演示记忆",
+      "sessionId": "session-1d74af7d-bd28-4b48-9fa4-dc12c7286bfe",
+      "exitCode": 0,
+      "memoryCount": 0,
+      "tools": [
+        {
+          "name": "memory_list",
+          "arguments": "{}"
+        },
+        {
+          "name": "memory_forget",
+          "arguments": "{\"id\": \"c2a8ef55\"}"
+        }
+      ]
+    },
+    {
+      "label": "05 验证：删除后再开会话",
+      "sessionId": "session-db8609ea-3cc5-4ae9-9326-fe639a572795",
+      "exitCode": 0,
+      "memoryCount": 0,
+      "tools": []
+    }
+  ],
+  "recordedAgentResponseTokens": 60619,
+  "usageScope": "Partial agent response usage only; extraction and auxiliary calls are excluded. Not total cost. Separate from the formal 306-call experiment.",
+  "caveats": [
+    "Manual management demonstration: extractMinChars=100000, requireApproval=false; not default automatic behavior.",
+    "The model cited the right entry but expressed uncertainty about its type. Original output retained.",
+    "Browser captured actual CLI stdout/stderr, not a native terminal desktop."
+  ]
+}

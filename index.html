@@ -126,19 +126,19 @@ dsh plugin --profile &lt;name&gt; add github:ChenYueqi2024/dsh-memory
     <h2>答辩材料与单人组分工</h2>
     <p class="sec-desc">作者确认课题与范围、配置凭证并运行真实评测，负责最终提交与答辩。AI 完成源码研究、实现、测试、评测脚本、结果复核和材料生成。</p>
     <div class="cta-row">
-      <a class="btn primary" href="downloads/dsh-memory-defense.pptx">可编辑 PPT</a>
+      <a class="btn primary" href="downloads/dsh-memory-defense.pptx">12 页鲸鱼版 PPT</a>
       <a class="btn" href="downloads/dsh-memory-defense.pdf">答辩 PDF</a>
-      <a class="btn" href="downloads/video-script.md">视频脚本</a>
-      <a class="btn" href="downloads/dsh-memory-intro-video.mp4">完整介绍视频（含真实演示）</a>
-      <a class="btn" href="downloads/dsh-memory-intro-video.srt">完整视频字幕</a>
+      <a class="btn" href="downloads/video-script.md">操作视频脚本与证据</a>
+      <a class="btn" href="downloads/dsh-memory-operations.mp4">插件操作视频（1 分 43 秒）</a>
+      <a class="btn" href="downloads/dsh-memory-operations.srt">操作视频字幕</a>
+      <a class="btn" href="downloads/team-contribution.md">单人组与 AI 分工</a>
     </div>
-    <h3 class="video-title">介绍视频 · 真实记录重放版</h3>
-    <video controls preload="metadata" playsinline poster="downloads/video-poster.png" src="downloads/dsh-memory-evaluation.mp4" aria-label="真实评测记录重放介绍视频"></video>
-    <p class="sec-desc">画面重放已完成的真实 API 记录，配音由本机语音合成生成；不是实时模型调用或现场终端录屏。</p>
-    <h3 class="video-title">补充：真实 dsh CLI 跨会话演示</h3>
-    <video controls preload="metadata" playsinline poster="downloads/live-poster.png" src="downloads/dsh-memory-live-demo.mp4" aria-label="真实 dsh CLI 输出窗口录制"></video>
-    <p class="sec-desc">两次独立启动，首次显式 memory_extract 落盘，新会话回答 pnpm 并引用 #7fa67757。浏览器直接捕获实时 CLI 输出展示窗口，保留等待过程；另配合成讲解与字幕，不计入 306 次正式评测。模型把记忆条目误称为会话，原始回答未修改。</p>
-    <p><a href="evidence/live-demo-review.md">录制方式与验证记录</a> · <a href="evidence/live-transcript.json">原始演示输出</a></p>
+    <h3 class="video-title">具体怎么用：保存、查看、跨会话召回与删除</h3>
+    <video controls preload="metadata" playsinline poster="downloads/operations-poster.png" src="downloads/dsh-memory-operations.mp4" aria-label="五步真实 CLI 操作演示，动态鲸鱼配合讲解"></video>
+    <p class="sec-desc">PPT 负责研究与结果，视频专注使用过程。安装与配置指引之后，是五次真实独立 CLI 启动：memory_extract 保存 → memory_list 查看 → 新会话召回 → memory_forget 删除 → 再次启动后无依据拒答。小鲸鱼随章节滑入、浮动并切换姿态，配中文合成语音与字幕。</p>
+    <p class="sec-desc">本次为手动管理演示，extractMinChars=100000、requireApproval=false，避免确认语句触发自动重学；默认自动模式为 120 字/90 秒。浏览器捕获真实 CLI 输出，保留等待和模型对编号类型不确定的原话；编号已由存储核实为 #c2a8ef55 记忆条目。新演示不计入 306 次正式评测，删除不代表永久禁止再次学习。</p>
+    <p><a href="evidence/operations-review.md">操作录制与验证说明</a> · <a href="evidence/operations-transcript.json">原始操作输出</a> · <a href="evidence/operations-verification.json">五步验证记录</a></p>
+    <p class="sec-desc">历史扩展材料：<a href="downloads/dsh-memory-intro-video.mp4">评测讲解完整片（4 分 24 秒）</a> · <a href="downloads/dsh-memory-intro-video.srt">旧版字幕</a>。已发布 Release 的原始附件保留；本页提供最新答辩材料。</p>
   </section>
 
   <section id="commit">
