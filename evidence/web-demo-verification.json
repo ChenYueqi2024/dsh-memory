@@ -1,0 +1,154 @@
+{
+  "pass": true,
+  "version": "0.5.1",
+  "installSource": "local prebuilt v0.5.1 tarball; recording retained for release",
+  "entryId": "748a4179",
+  "retentionSequence": [
+    "ordinary",
+    "persistent",
+    "ordinary"
+  ],
+  "unpinPreservesContentAndAge": true,
+  "preInstallEmptySessionInjection": true,
+  "newSessionRecallWithoutTools": true,
+  "toolErrors": 0,
+  "sessions": [
+    {
+      "id": "session-3ef22e95-5f1c-4d5b-a1e6-9bb69662771a",
+      "createdAt": 1794650222637,
+      "tools": [
+        {
+          "turn": 1,
+          "name": "memory_extract",
+          "args": {}
+        },
+        {
+          "turn": 1,
+          "name": "memory_list",
+          "args": {}
+        },
+        {
+          "turn": 2,
+          "name": "memory_pin",
+          "args": {
+            "id": "748a4179",
+            "pinned": true
+          }
+        },
+        {
+          "turn": 3,
+          "name": "memory_list",
+          "args": {}
+        }
+      ],
+      "injected": true,
+      "firstTurnRecall": false,
+      "usage": [
+        {
+          "inputTokens": 227,
+          "outputTokens": 23,
+          "cacheReadTokens": 7424,
+          "cacheWriteTokens": 0,
+          "totalTokens": 7674
+        },
+        {
+          "inputTokens": 1454,
+          "outputTokens": 22,
+          "cacheReadTokens": 7552,
+          "cacheWriteTokens": 0,
+          "totalTokens": 9028
+        },
+        {
+          "inputTokens": 257,
+          "outputTokens": 74,
+          "cacheReadTokens": 8832,
+          "cacheWriteTokens": 0,
+          "totalTokens": 9163
+        },
+        {
+          "inputTokens": 243,
+          "outputTokens": 120,
+          "cacheReadTokens": 8960,
+          "cacheWriteTokens": 0,
+          "totalTokens": 9323
+        },
+        {
+          "inputTokens": 1454,
+          "outputTokens": 22,
+          "cacheReadTokens": 9216,
+          "cacheWriteTokens": 0,
+          "totalTokens": 10692
+        },
+        {
+          "inputTokens": 217,
+          "outputTokens": 22,
+          "cacheReadTokens": 10496,
+          "cacheWriteTokens": 0,
+          "totalTokens": 10735
+        },
+        {
+          "inputTokens": 172,
+          "outputTokens": 51,
+          "cacheReadTokens": 10624,
+          "cacheWriteTokens": 0,
+          "totalTokens": 10847
+        }
+      ]
+    },
+    {
+      "id": "session-e270a695-befa-4e07-bd68-7c223fe12a81",
+      "createdAt": 1794650463896,
+      "tools": [
+        {
+          "turn": 2,
+          "name": "memory_pin",
+          "args": {
+            "id": "748a4179",
+            "pinned": false
+          }
+        },
+        {
+          "turn": 2,
+          "name": "memory_list",
+          "args": {}
+        }
+      ],
+      "injected": true,
+      "firstTurnRecall": true,
+      "usage": [
+        {
+          "inputTokens": 7223,
+          "outputTokens": 86,
+          "cacheReadTokens": 512,
+          "cacheWriteTokens": 0,
+          "totalTokens": 7821
+        },
+        {
+          "inputTokens": 180,
+          "outputTokens": 255,
+          "cacheReadTokens": 7680,
+          "cacheWriteTokens": 0,
+          "totalTokens": 8115
+        },
+        {
+          "inputTokens": 1393,
+          "outputTokens": 22,
+          "cacheReadTokens": 8064,
+          "cacheWriteTokens": 0,
+          "totalTokens": 9479
+        },
+        {
+          "inputTokens": 196,
+          "outputTokens": 74,
+          "cacheReadTokens": 9344,
+          "cacheWriteTokens": 0,
+          "totalTokens": 9614
+        }
+      ]
+    }
+  ],
+  "recordedAgentResponseTokens": 102491,
+  "usageScope": "Agent responses only. Auxiliary extraction/title requests are not all counted; not a complete bill. Separate from formal v0.4.1 evaluation.",
+  "installedEntrySHA256": "83941f6e3407f69c200956e040078e9f14157bf01006461893f5e65e65234f5c",
+  "capture": "New real dsh web capture; waits edited; right-side whale and AI narration added in postproduction; application content unmodified."
+}
