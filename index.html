@@ -11,7 +11,7 @@
 
   <header>
     <div class="logo-row">
-      <div class="logo-badge">◈</div>
+      <img class="logo-badge" src="assets/whale-guide.png" alt="项目原创非官方鲸鱼讲解员">
       <div>
         <h1>dsh-memory</h1>
         <div class="subtitle">给 DeepSeek Harness 装上跨会话项目记忆 · 原生 Cordis 插件（MIT）</div>
@@ -19,32 +19,34 @@
     </div>
     <div class="cta-row">
       <a class="btn primary" href="https://github.com/ChenYueqi2024/dsh-memory">GitHub 仓库</a>
+      <a class="btn" href="#evaluation">真实评测</a>
+      <a class="btn" href="#deliverables">答辩材料</a>
       <a class="btn" href="#install">快速开始</a>
       <a class="btn" href="#commit">配套插件 dsh-commit</a>
     </div>
   </header>
 
   <section class="demo">
-    <h2>十秒看懂它解决什么问题</h2>
+    <h2>从真实记录看跨上下文召回</h2>
+    <p class="sec-desc">2026-11-14 小试验节选。真实 API 响应，学习后销毁并重建宿主上下文；下方是记录展示，非现场终端录屏。</p>
     <div class="demo-grid">
       <div class="term">
-        <div class="term-bar"><i></i><i></i><i></i><span>会话 1 · 真实记录</span></div>
-        <pre>&gt; dsh "请记住：本项目是厦门大学期末工程，
-  所有回答必须使用中文。"
+        <div class="term-bar"><i></i><i></i><i></i><span>历史输入与实际抽取</span></div>
+        <pre>项目确定使用 pnpm 作为唯一包管理器。
+安装、更新和 CI 都要遵守。
 
-[模型调用 memory_extract 工具]
-✓ 沉淀 2 条新记忆：
-  [fact]       本项目是厦门大学的期末工程。
-  [preference] 用户要求所有回答必须使用中文。</pre>
+实际抽取并落盘：
+[convention] 项目统一使用 pnpm 作为唯一包管理器，
+安装、更新和 CI 都必须遵守。</pre>
       </div>
       <div class="term">
-        <div class="term-bar"><i></i><i></i><i></i><span>会话 2 · 全新启动</span></div>
-        <pre>&gt; dsh "这个项目是什么？你怎么知道的？"
+        <div class="term-bar"><i></i><i></i><i></i><span>新上下文 · 实际回答</span></div>
+        <pre>问题：本项目规定使用哪个包管理器？
 
-本项目是厦门大学的期末工程。
-这不是我从本次对话推出来的——注入我系统提示的
-「项目长期记忆」段里有这一条：
-  [fact] 本项目是厦门大学的期末工程。（来源：#c32400e3 - 2026-10-05）</pre>
+{"answer":"pnpm","sources":["#fe61379f"]}
+
+来源：已批准、属于当前工作区的磁盘记忆。
+静态说明也答对；无插件回答 UNKNOWN。</pre>
       </div>
     </div>
   </section>
@@ -52,22 +54,54 @@
   <section>
     <h2>八项核心能力</h2>
     <div class="features">
-      <div class="feature"><h3>自动沉淀</h3><p>每轮结束自动用一次辅助 LLM 调用抽取决策、约定、偏好、事实；无需用户喊"记住"。</p></div>
-      <div class="feature"><h3>语义去重</h3><p>词项包含度判定复述，"用中文回答"与"用户要求中文回答"合并为一条——重复即强化置信度。</p></div>
-      <div class="feature"><h3>工作区隔离</h3><p>记忆按项目路径打标，多项目互不污染；全局记忆处处可见。</p></div>
+      <div class="feature"><h3>自动沉淀</h3><p>轮末在增量和间隔达标时，用辅助 LLM 调用抽取决策、约定、偏好、事实；默认最小间隔 90 秒。</p></div>
+      <div class="feature"><h3>语义去重</h3><p>模型语义对齐与词项包含度兜底协作；本组 12 次同义重述均强化原记录，没有重复新增。</p></div>
+      <div class="feature"><h3>工作区隔离</h3><p>注入与工具操作限定当前项目及全局记录；自动抽取只修改当前项目。</p></div>
       <div class="feature"><h3>相关性注入</h3><p>新会话按有效置信度 + 关键词重合度排序注入 Top-N，拒绝无脑全量灌上下文。</p></div>
-      <div class="feature"><h3>差异化衰减</h3><p>按类别设置半衰期——事实 14 天、决策 30 天、偏好 45 天；沉默的记忆自动淡出。</p></div>
-      <div class="feature"><h3>来源可解释</h3><p>每条记忆带来源会话编号与日期，被问"你怎么知道的"能说清出处，错了可用 memory_forget 删除。</p></div>
-      <div class="feature"><h3>冲突消解</h3><p>新信息推翻旧记忆时，旧条目标记"已被取代"退役留档，新事实独立入库——记忆不会自相矛盾。</p></div>
-      <div class="feature"><h3>审批准入</h3><p>requireApproval 开启后，自动沉淀的记忆需人工批准才注入——对抗记忆污染。</p></div>
+      <div class="feature"><h3>差异化衰减</h3><p>半衰期：fact 14 天，decision / convention 30 天，preference 45 天；衰减一半不等于立即删除。</p></div>
+      <div class="feature"><h3>来源可解释</h3><p>每条记忆带条目编号与最近创建或强化日期；存储中保留初始会话编号，错了可用 memory_forget 删除。</p></div>
+      <div class="feature"><h3>冲突消解</h3><p>新事实先写入，旧事实再退役留档；待审批替代项整批获准后才退役旧规则。识别效果仍依赖模型。</p></div>
+      <div class="feature"><h3>审批准入</h3><p>requireApproval 开启后，自动候选经 memory_approve 批准才注入；冲突旧事实在替代项批准后退役。审批工具可由模型调用。</p></div>
+    </div>
+  </section>
+
+  <section id="evaluation">
+    <p class="eyebrow">2026-11-14 · 真实模型对照</p>
+    <h2>收益来自约定变更后的自动维护</h2>
+    <p class="sec-desc">20 个固定合成主案例，各组重复 3 次。deepseek-flash，统一问题与评分。静态 AGENTS.md 是正确初始快照，之后冻结。</p>
+    <div class="table-scroll"><table>
+      <caption>主实验结果与 token 用量（含历史抽取）</caption>
+      <thead><tr><th scope="col">组别</th><th scope="col">答对 / 计划</th><th scope="col">准确率</th><th scope="col">调用数</th><th scope="col">合计 tokens</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">无插件</th><td>15/60</td><td>25%</td><td>60</td><td>9,237</td></tr>
+        <tr><th scope="row">冻结静态 AGENTS.md</th><td>51/60</td><td>85%</td><td>60</td><td>10,455</td></tr>
+        <tr class="highlight"><th scope="row">dsh-memory</th><td>60/60</td><td>100%</td><td>159（含 99 抽取）</td><td>59,949</td></tr>
+      </tbody>
+    </table></div>
+    <p class="finding"><strong>多答对 9 次，增加 15 个百分点。</strong>全部来自 npm 改 pnpm、Node 18 改 22、周三发布改周五。恢复旧发布节奏时，静态组也答对。</p>
+    <p class="finding"><strong>成本约为静态组的 5.73 倍 tokens。</strong>主实验包含历史抽取，未计人工维护时间，也未换算货币费用。全部 306 次请求共 89,057 tokens，含独立诊断 9,416 tokens。</p>
+    <p class="sec-desc">192 个实验单元全部完成；独立审批/删除诊断 12/12。插件回归测试 45 + 7，评测脚本自检另有 19 项；测试数量与模型作答数量分开统计。</p>
+    <details open><summary>如何理解这些数字</summary>
+      <ul>
+        <li>仅限固定合成案例，60 次作答不是 60 个独立案例，没有独立留出集或显著性结论。</li>
+        <li>未比较持续人工维护的 AGENTS.md；本次是受控上下文实验，非完整 CLI/Web/TUI 任务评测。</li>
+        <li>长会话、真实代码任务、时间衰减和复杂攻击未覆盖。实验 1 字/0 秒触发设置不代表默认 120 字/90 秒成本。</li>
+        <li>AI 对照历史审阅 96 条新增候选，未发现无支持事实；未做独立人工标注，不等于普遍零污染。</li>
+      </ul>
+    </details>
+    <div class="cta-row evidence-links">
+      <a class="btn" href="evidence/full-evaluation.md">完整评测报告</a>
+      <a class="btn" href="evidence/summary.json">机器可读汇总</a>
+      <a class="btn" href="evidence/cases.json">固定案例</a>
+      <a class="btn" href="evidence/candidate-review.json">AI 候选复核表</a>
     </div>
   </section>
 
   <section>
     <h2>架构：四个官方扩展点的组合</h2>
     <div class="arch">
-      <div class="arch-row"><span class="arch-tag">沉淀</span><code>session/event</code> 积累对话文本 → <code>agent/turn-stopping</code> 轮末触发抽取（headless 下 <code>session/disposed</code> 来不及触发，这是源码剖析得出的关键结论）</div>
-      <div class="arch-row"><span class="arch-tag">抽取</span><code>ctx.llm.stream()</code> 一次辅助调用输出 JSON 候选，不干扰 Agent 主循环</div>
+      <div class="arch-row"><span class="arch-tag">沉淀</span><code>session/event</code> 积累对话文本 → <code>agent/turn-stopping</code> 轮末触发抽取（headless 退出时 <code>session/disposed</code> 兜底不能保证完成）</div>
+      <div class="arch-row"><span class="arch-tag">抽取</span><code>ctx.llm.stream()</code> 辅助调用输出 JSON 候选，会增加调用量与轮末等待</div>
       <div class="arch-row"><span class="arch-tag">存储</span><code>ctx.storageDomain</code> 官方存储域 <code>dsh_memory</code>，per-record JSON 后端，零自建依赖</div>
       <div class="arch-row"><span class="arch-tag">注入</span><code>agent/created</code> 时挂 <code>systemPrompt.section()</code>，按当前问题动态求值</div>
       <div class="arch-row"><span class="arch-tag">管理</span><code>ctx.tools.register()</code> 暴露 memory_list / memory_forget / memory_extract / memory_approve</div>
@@ -76,14 +110,35 @@
 
   <section id="install">
     <h2>快速开始</h2>
+    <p class="sec-desc">对应版本：<a href="https://github.com/ChenYueqi2024/dsh-memory/releases/tag/v0.4.1">dsh-memory v0.4.1</a> / <a href="https://github.com/ChenYueqi2024/dsh-commit/releases/tag/v0.2.2">dsh-commit v0.2.2</a>。运行时基线 dsh 0.2.0-rc.2，使用安装者自己的模型配置。</p>
     <div class="term wide">
       <div class="term-bar"><i></i><i></i><i></i><span>bash</span></div>
       <pre>git clone https://github.com/ChenYueqi2024/dsh-memory && cd dsh-memory
-npm install && npm run build && npm test     # 27 个单元用例（dsh-commit 另有 7 个）
+npm ci && npm test     # prepare 自动构建；45 个自动化用例（dsh-commit 另有 7 个）
 
-# 装入你的 profile（复制到 node_modules 并在 cordis.patch.yml 插入一行）
-# config: { provider: deepseek-official, model: deepseek-flash }</pre>
+# 通过插件管理器装入你的 profile；prepare 自动生成入口
+dsh plugin --profile &lt;name&gt; add github:ChenYueqi2024/dsh-memory
+# 如 pnpm 拦截 prepare，仅放行错误中列出的精确包名和 Git 哈希。</pre>
     </div>
+  </section>
+
+  <section id="deliverables">
+    <h2>答辩材料与单人组分工</h2>
+    <p class="sec-desc">作者确认课题与范围、配置凭证并运行真实评测，负责最终提交与答辩。AI 完成源码研究、实现、测试、评测脚本、结果复核和材料生成。</p>
+    <div class="cta-row">
+      <a class="btn primary" href="downloads/dsh-memory-defense.pptx">可编辑 PPT</a>
+      <a class="btn" href="downloads/dsh-memory-defense.pdf">答辩 PDF</a>
+      <a class="btn" href="downloads/video-script.md">视频脚本</a>
+      <a class="btn" href="downloads/dsh-memory-intro-video.mp4">完整介绍视频（含真实演示）</a>
+      <a class="btn" href="downloads/dsh-memory-intro-video.srt">完整视频字幕</a>
+    </div>
+    <h3 class="video-title">介绍视频 · 真实记录重放版</h3>
+    <video controls preload="metadata" playsinline poster="downloads/video-poster.png" src="downloads/dsh-memory-evaluation.mp4" aria-label="真实评测记录重放介绍视频"></video>
+    <p class="sec-desc">画面重放已完成的真实 API 记录，配音由本机语音合成生成；不是实时模型调用或现场终端录屏。</p>
+    <h3 class="video-title">补充：真实 dsh CLI 跨会话演示</h3>
+    <video controls preload="metadata" playsinline poster="downloads/live-poster.png" src="downloads/dsh-memory-live-demo.mp4" aria-label="真实 dsh CLI 输出窗口录制"></video>
+    <p class="sec-desc">两次独立启动，首次显式 memory_extract 落盘，新会话回答 pnpm 并引用 #7fa67757。浏览器直接捕获实时 CLI 输出展示窗口，保留等待过程；另配合成讲解与字幕，不计入 306 次正式评测。模型把记忆条目误称为会话，原始回答未修改。</p>
+    <p><a href="evidence/live-demo-review.md">录制方式与验证记录</a> · <a href="evidence/live-transcript.json">原始演示输出</a></p>
   </section>
 
   <section id="commit">
@@ -99,8 +154,8 @@ chore(license): 添加 MIT 许可证</pre>
   </section>
 
   <footer>
-    厦门大学《学科实践三 —— A+ 协同编程·项目实战》期末工程 · 单人组 · 全程 AI（ZCode）协同开发<br>
-    基于 <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness (dsh) 0.2.0-rc.2</a> · MIT License · 数据与引述均来自真实运行记录
+    厦门大学《学科实践三 —— A+ 协同编程·项目实战》期末工程 · 单人组 · AI 协同开发<br>
+    基于 <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness (dsh) 0.2.0-rc.2</a> · MIT License · 2026-11-14 评测快照
   </footer>
 </div>
 </body>

@@ -1,0 +1,397 @@
+{
+  "mode": "live",
+  "label": "LIVE CONTROLLED-CONTEXT STUDY",
+  "complete": true,
+  "groups": {
+    "none": {
+      "planned": 60,
+      "completed": 60,
+      "errors": 0,
+      "skipped": 0,
+      "quality": {
+        "correct": 15,
+        "accuracy": 0.25,
+        "unsupportedAnswerRate": 0,
+        "unsupportedAnswerDenominator": 15,
+        "validCitationRate": null,
+        "formatFailureCount": 0,
+        "byCategory": {
+          "recall": {
+            "planned": 12,
+            "correct": 0,
+            "accuracy": 0
+          },
+          "paraphrase": {
+            "planned": 12,
+            "correct": 0,
+            "accuracy": 0
+          },
+          "update": {
+            "planned": 12,
+            "correct": 0,
+            "accuracy": 0
+          },
+          "isolation": {
+            "planned": 12,
+            "correct": 3,
+            "accuracy": 0.25
+          },
+          "abstention": {
+            "planned": 12,
+            "correct": 12,
+            "accuracy": 1
+          }
+        }
+      }
+    },
+    "static": {
+      "planned": 60,
+      "completed": 60,
+      "errors": 0,
+      "skipped": 0,
+      "quality": {
+        "correct": 51,
+        "accuracy": 0.85,
+        "unsupportedAnswerRate": 0,
+        "unsupportedAnswerDenominator": 15,
+        "validCitationRate": 1,
+        "formatFailureCount": 0,
+        "byCategory": {
+          "isolation": {
+            "planned": 12,
+            "correct": 12,
+            "accuracy": 1
+          },
+          "recall": {
+            "planned": 12,
+            "correct": 12,
+            "accuracy": 1
+          },
+          "paraphrase": {
+            "planned": 12,
+            "correct": 12,
+            "accuracy": 1
+          },
+          "update": {
+            "planned": 12,
+            "correct": 3,
+            "accuracy": 0.25
+          },
+          "abstention": {
+            "planned": 12,
+            "correct": 12,
+            "accuracy": 1
+          }
+        }
+      }
+    },
+    "memory": {
+      "planned": 60,
+      "completed": 60,
+      "errors": 0,
+      "skipped": 0,
+      "quality": {
+        "correct": 60,
+        "accuracy": 1,
+        "unsupportedAnswerRate": 0,
+        "unsupportedAnswerDenominator": 15,
+        "validCitationRate": 1,
+        "formatFailureCount": 0,
+        "byCategory": {
+          "update": {
+            "planned": 12,
+            "correct": 12,
+            "accuracy": 1
+          },
+          "paraphrase": {
+            "planned": 12,
+            "correct": 12,
+            "accuracy": 1
+          },
+          "abstention": {
+            "planned": 12,
+            "correct": 12,
+            "accuracy": 1
+          },
+          "recall": {
+            "planned": 12,
+            "correct": 12,
+            "accuracy": 1
+          },
+          "isolation": {
+            "planned": 12,
+            "correct": 12,
+            "accuracy": 1
+          }
+        }
+      }
+    }
+  },
+  "cost": {
+    "none": {
+      "calls": 60,
+      "extractionCalls": 0,
+      "usageMissingCalls": 0,
+      "promptTokens": 8577,
+      "completionTokens": 660,
+      "observedCallMs": 44472.61,
+      "answerMedianMs": 755.87,
+      "extractionMedianMs": null
+    },
+    "static": {
+      "calls": 60,
+      "extractionCalls": 0,
+      "usageMissingCalls": 0,
+      "promptTokens": 9549,
+      "completionTokens": 906,
+      "observedCallMs": 40166.12,
+      "answerMedianMs": 640.0899999999999,
+      "extractionMedianMs": null
+    },
+    "memory": {
+      "calls": 159,
+      "extractionCalls": 99,
+      "usageMissingCalls": 0,
+      "promptTokens": 56370,
+      "completionTokens": 3579,
+      "observedCallMs": 119008.10999999994,
+      "answerMedianMs": 732.4300000000001,
+      "extractionMedianMs": 742.75
+    }
+  },
+  "paired": {
+    "none": {
+      "pairs": 60,
+      "memoryOnlyCorrect": 45,
+      "baselineOnlyCorrect": 0
+    },
+    "static": {
+      "pairs": 60,
+      "memoryOnlyCorrect": 9,
+      "baselineOnlyCorrect": 0
+    }
+  },
+  "diagnosticCost": {
+    "calls": 27,
+    "extractionCalls": 15,
+    "usageMissingCalls": 0,
+    "promptTokens": 8802,
+    "completionTokens": 614,
+    "observedCallMs": 21087.26,
+    "answerMedianMs": 708.935,
+    "extractionMedianMs": 831.34
+  },
+  "diagnostics": [
+    {
+      "caseId": "control-forgotten",
+      "repeat": 1,
+      "status": "ok",
+      "score": {
+        "formatValid": true,
+        "correct": true,
+        "expectsUnknown": true,
+        "unsupportedAnswer": false,
+        "sourceValid": true,
+        "citationEligible": false,
+        "memoryChecks": {
+          "total": true
+        }
+      }
+    },
+    {
+      "caseId": "control-pending",
+      "repeat": 2,
+      "status": "ok",
+      "score": {
+        "formatValid": true,
+        "correct": true,
+        "expectsUnknown": true,
+        "unsupportedAnswer": false,
+        "sourceValid": true,
+        "citationEligible": false,
+        "memoryChecks": {
+          "active": true,
+          "pending": true
+        }
+      }
+    },
+    {
+      "caseId": "control-partial-conflict",
+      "repeat": 3,
+      "status": "ok",
+      "score": {
+        "formatValid": true,
+        "correct": true,
+        "expectsUnknown": false,
+        "unsupportedAnswer": false,
+        "sourceValid": true,
+        "citationEligible": true,
+        "memoryChecks": {
+          "active": true,
+          "pending": true,
+          "superseded": true
+        }
+      }
+    },
+    {
+      "caseId": "control-partial-conflict",
+      "repeat": 2,
+      "status": "ok",
+      "score": {
+        "formatValid": true,
+        "correct": true,
+        "expectsUnknown": false,
+        "unsupportedAnswer": false,
+        "sourceValid": true,
+        "citationEligible": true,
+        "memoryChecks": {
+          "active": true,
+          "pending": true,
+          "superseded": true
+        }
+      }
+    },
+    {
+      "caseId": "control-pending",
+      "repeat": 1,
+      "status": "ok",
+      "score": {
+        "formatValid": true,
+        "correct": true,
+        "expectsUnknown": true,
+        "unsupportedAnswer": false,
+        "sourceValid": true,
+        "citationEligible": false,
+        "memoryChecks": {
+          "active": true,
+          "pending": true
+        }
+      }
+    },
+    {
+      "caseId": "control-approved",
+      "repeat": 3,
+      "status": "ok",
+      "score": {
+        "formatValid": true,
+        "correct": true,
+        "expectsUnknown": false,
+        "unsupportedAnswer": false,
+        "sourceValid": true,
+        "citationEligible": true,
+        "memoryChecks": {
+          "active": true,
+          "pending": true
+        }
+      }
+    },
+    {
+      "caseId": "control-partial-conflict",
+      "repeat": 1,
+      "status": "ok",
+      "score": {
+        "formatValid": true,
+        "correct": true,
+        "expectsUnknown": false,
+        "unsupportedAnswer": false,
+        "sourceValid": true,
+        "citationEligible": true,
+        "memoryChecks": {
+          "active": true,
+          "pending": true,
+          "superseded": true
+        }
+      }
+    },
+    {
+      "caseId": "control-pending",
+      "repeat": 3,
+      "status": "ok",
+      "score": {
+        "formatValid": true,
+        "correct": true,
+        "expectsUnknown": true,
+        "unsupportedAnswer": false,
+        "sourceValid": true,
+        "citationEligible": false,
+        "memoryChecks": {
+          "active": true,
+          "pending": true
+        }
+      }
+    },
+    {
+      "caseId": "control-forgotten",
+      "repeat": 2,
+      "status": "ok",
+      "score": {
+        "formatValid": true,
+        "correct": true,
+        "expectsUnknown": true,
+        "unsupportedAnswer": false,
+        "sourceValid": true,
+        "citationEligible": false,
+        "memoryChecks": {
+          "total": true
+        }
+      }
+    },
+    {
+      "caseId": "control-forgotten",
+      "repeat": 3,
+      "status": "ok",
+      "score": {
+        "formatValid": true,
+        "correct": true,
+        "expectsUnknown": true,
+        "unsupportedAnswer": false,
+        "sourceValid": true,
+        "citationEligible": false,
+        "memoryChecks": {
+          "total": true
+        }
+      }
+    },
+    {
+      "caseId": "control-approved",
+      "repeat": 2,
+      "status": "ok",
+      "score": {
+        "formatValid": true,
+        "correct": true,
+        "expectsUnknown": false,
+        "unsupportedAnswer": false,
+        "sourceValid": true,
+        "citationEligible": true,
+        "memoryChecks": {
+          "active": true,
+          "pending": true
+        }
+      }
+    },
+    {
+      "caseId": "control-approved",
+      "repeat": 1,
+      "status": "ok",
+      "score": {
+        "formatValid": true,
+        "correct": true,
+        "expectsUnknown": false,
+        "unsupportedAnswer": false,
+        "sourceValid": true,
+        "citationEligible": true,
+        "memoryChecks": {
+          "active": true,
+          "pending": true
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "Synthetic, public, non-held-out cases; no generalization or significance claim.",
+    "Static snapshots are curated once and frozen; ongoing manual maintenance is not measured.",
+    "Real plugin lifecycle/storage with controlled transport and answer context; not full CLI/Web/TUI.",
+    "Tokens are provider usage only; latency excludes human maintenance; no invented currency estimate.",
+    "Citation validity checks identifier existence, not semantic entailment. Record counts are diagnostic proxies."
+  ]
+}

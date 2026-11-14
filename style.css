@@ -10,7 +10,7 @@ a { color: var(--primary); text-decoration: none; }
 
 header { padding: 64px 0 32px; }
 .logo-row { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
-.logo-badge { width: 60px; height: 60px; border-radius: 16px; background: linear-gradient(135deg, var(--primary), #5a48c9); display: flex; align-items: center; justify-content: center; font-size: 30px; color: #fff; }
+.logo-badge { width: 76px; height: 76px; object-fit:contain; flex-shrink:0; }
 h1 { font-size: 44px; font-weight: 700; }
 .subtitle { color: var(--muted); font-size: 16px; }
 .cta-row { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -40,6 +40,29 @@ h2 { font-size: 26px; margin: 48px 0 8px; }
 
 footer { border-top: 1px solid #22263a; margin-top: 64px; padding: 28px 0 44px; color: var(--muted); font-size: 13px; }
 
+.eyebrow { margin-top:56px; color:var(--accent); font-size:14px; letter-spacing:.06em; }
+.eyebrow + h2 { margin-top:8px; }
+.table-scroll { overflow-x:auto; margin:24px 0; }
+table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+caption { text-align:left; padding-bottom:12px; color:var(--muted); font-size:14px; }
+th, td { text-align:left; padding:16px 14px; border-bottom:1px solid #34394d; white-space:nowrap; }
+thead { color:var(--muted); font-size:14px; }
+.highlight { color:var(--accent); background:rgba(45,212,167,.06); }
+.finding { margin:18px 0; }
+details { margin-top:20px; padding:20px; border:1px solid #34394d; border-radius:10px; }
+summary { cursor:pointer; font-weight:600; }
+details ul { padding:16px 0 0 22px; color:#b8bdd0; }
+details li { margin:8px 0; }
+.evidence-links { margin-top:20px; }
+.video-title { margin:26px 0 12px; }
+video { display:block; width:100%; aspect-ratio:16/9; background:var(--panel); border-radius:12px; }
+a:focus-visible, summary:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
+
 @media (max-width: 860px) {
   .demo-grid, .features { grid-template-columns: 1fr; }
+  .logo-row { align-items:flex-start; }
+  .logo-badge { flex-shrink:0; }
+  h1 { font-size:34px; }
+  .term pre { overflow-wrap:anywhere; }
+  .wrap { padding:0 18px; }
 }
