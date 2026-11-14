@@ -36,7 +36,9 @@ export async function bootMemory(host, { pluginPath, storage, workspaceRoot, req
     await ctx.loader.create({ name: pathToFileURL(pluginPath).href,
       config: { requireApproval, extractMinChars: 1, autoExtractMinIntervalMs: 0, injectMax: 30, maxOutputTokens: 1024, timeoutMs: 120000 } })
     await ctx.loader.await()
-    if (tools.size !== 4) throw new Error('Memory plugin did not load four tools')
+    for (const name of ['memory_list', 'memory_forget', 'memory_extract', 'memory_approve']) {
+      if (!tools.has(name)) throw new Error(`Memory plugin did not load required tool: ${name}`)
+    }
     await tools.get('memory_list').execute({}, { agent: agent('a') })
     const records = () => [...ctx.storageDomain.get('dsh_memory').table('memories').entries()].map(([, value]) => value)
     return {

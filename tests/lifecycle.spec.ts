@@ -77,10 +77,37 @@ describe('plugin lifecycle and tool boundaries', () => {
   it('rejects tools without an owning session and from subagents', async () => {
     const h = await harness()
     for (const a of [undefined, h.agent('sub', 'D:\\A', 'subagent')]) {
-      for (const name of ['memory_list', 'memory_approve', 'memory_forget', 'memory_extract']) {
+      for (const name of ['memory_list', 'memory_approve', 'memory_forget', 'memory_extract', 'memory_pin']) {
         await expect(h.call(name, a, { id: 'aaaa' })).rejects.toThrow(/session|subagent/)
       }
     }
+  })
+
+  it('pins a selected approved row without model calls and reports unpinning consequences', async () => {
+    const old = new Date(Date.now() - 365 * 86_400_000).toISOString()
+    const h = await harness([row('aaaa1111', 'd:/a', { createdAt: old }), row('bbbb2222', 'd:/b')])
+    const a = h.agent()
+    expect((await h.call('memory_pin', a, { id: 'aaaa', pinned: true })).updated).toBe(true)
+    expect((await h.call('memory_list', a)).lines[0]).toContain('持久保留')
+    const next = h.agent('s2')
+    await h.emit('agent/created', { agent: next })
+    expect(next.sections[0].text()).toContain('[持久]')
+    expect((await h.call('memory_pin', a, { id: 'bbbb', pinned: true })).updated).toBe(false)
+    const unpin = await h.call('memory_pin', a, { id: 'aaaa', pinned: false })
+    expect(unpin.updated).toBe(true)
+    expect(unpin.detail).toContain('原时间')
+    expect(unpin.detail).toContain('可能不再自动注入')
+    expect(next.sections[0].text()).toBe('')
+    expect(h.requests).toHaveLength(0)
+  })
+
+  it('does not let extraction nominate persistent memories', async () => {
+    const h = await harness()
+    const a = h.agent()
+    h.replies.push({ new: [{ kind: 'convention', text: '本项目使用 pnpm 管理依赖', pinned: true }] })
+    await h.say(a)
+    await h.emit('agent/turn-stopping', { agent: a })
+    expect([...h.rows.values()][0].pinned).not.toBe(true)
   })
 
   it('persists automatic extraction in its workspace and injects with provenance', async () => {

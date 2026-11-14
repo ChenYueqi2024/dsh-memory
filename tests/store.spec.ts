@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryStore, formatMemorySection, provenance, tokenize, type MemoryRecord } from '../src/store.ts'
 
 /** Map-backed KvTable stub: put/delete are async like the real domain API. */
@@ -24,6 +24,74 @@ const base = { sourceSessionId: 's1', confidence: 1, hits: 0 }
 function record(partial: Partial<MemoryRecord>): MemoryRecord {
   return { id: partial.id ?? crypto.randomUUID(), kind: 'fact', text: '', createdAt: new Date().toISOString(), ...base, ...partial } as MemoryRecord
 }
+
+afterEach(() => vi.restoreAllMocks())
+
+describe('user-selected persistent memories', () => {
+  it.each([180, 365])('keeps a pinned convention eligible after %i days without promoting ordinary memories', async (days) => {
+    const createdAt = '2026-01-01T00:00:00.000Z'
+    const store = new MemoryStore(fakeTable([
+      record({ id: 'persistent', kind: 'convention', text: '使用 pnpm', createdAt }),
+      record({ id: 'ordinary', kind: 'convention', text: '临时测试地址', createdAt }),
+    ]) as never)
+    await store.pin('persistent', true)
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse(createdAt) + days * 86_400_000)
+    expect(store.rankForInjection(10).map(r => r.id)).toEqual(['persistent'])
+    expect(store.effective(store.all().find(r => r.id === 'persistent')!)).toBe(1)
+    expect(formatMemorySection(store.rankForInjection(10))).toContain('[持久]')
+  })
+
+  it('resumes the original age when unpinned, without renewing or approving the record', async () => {
+    const old = record({ id: 'old', createdAt: new Date(Date.now() - 365 * 86_400_000).toISOString() })
+    const store = new MemoryStore(fakeTable([old]) as never)
+    expect(await store.pin('old', true)).toMatchObject({ pinned: true, createdAt: old.createdAt, confidence: 1 })
+    expect(store.rankForInjection(10)).toHaveLength(1)
+    expect(await store.pin('old', false)).toMatchObject({ pinned: false, createdAt: old.createdAt, confidence: 1 })
+    expect(store.rankForInjection(10)).toHaveLength(0)
+  })
+
+  it('preserves a pin through deduplication and reinforcement', async () => {
+    const store = new MemoryStore(fakeTable([record({ id: 'keep', text: '项目统一使用 pnpm', pinned: true })]) as never)
+    await store.merge([{ kind: 'convention', text: '项目统一使用 pnpm' }], { sessionId: 's2' })
+    expect((await store.reinforce('keep'))?.pinned).toBe(true)
+    expect(store.all()).toHaveLength(1)
+  })
+
+  it('retires a pinned rule after replacement approval without inheriting the pin', async () => {
+    const store = new MemoryStore(fakeTable([record({ id: 'old', text: '使用 npm', pinned: true })]) as never)
+    await store.merge([{ kind: 'convention', text: '使用 pnpm' }], { sessionId: 's2', excludeIds: ['old'], approved: false })
+    const replacement = store.all().find(r => r.id !== 'old')!
+    expect(store.rankForInjection(10).map(r => r.id)).toEqual(['old'])
+    await store.approve(replacement.id)
+    expect(store.rankForInjection(10).map(r => r.id)).toEqual([replacement.id])
+    expect(store.all().find(r => r.id === replacement.id)?.pinned).not.toBe(true)
+    expect(await store.pin('old', true)).toBeUndefined()
+    expect((await store.forget('old'))?.pinned).toBe(true)
+  })
+
+  it('rejects pending, retired, foreign and ambiguous targets, while retaining global access', async () => {
+    const store = new MemoryStore(fakeTable([
+      record({ id: 'pending', approved: false }), record({ id: 'retired', supersededAt: new Date().toISOString() }),
+      record({ id: 'foreign', workspace: 'd:/b' }), record({ id: 'same-1' }), record({ id: 'same-2' }), record({ id: 'global' }),
+    ]) as never)
+    for (const id of ['pending', 'retired', 'foreign', 'same', '', '#', 'missing']) {
+      expect(await store.pin(id, true, 'd:/a')).toBeUndefined()
+    }
+    expect((await store.pin('#global', true, 'd:/a'))?.pinned).toBe(true)
+    expect(store.all().find(r => r.id === 'pending')?.approved).toBe(false)
+  })
+
+  it('does not bypass approval, workspace, relevance or injection budgets', () => {
+    const store = new MemoryStore(fakeTable([
+      record({ id: 'pinned', text: '部署说明', pinned: true, confidence: 2 }),
+      record({ id: 'match', text: 'pnpm', pinned: true }),
+      record({ id: 'pending', text: 'pnpm', pinned: true, approved: false }),
+      record({ id: 'foreign', text: 'pnpm', pinned: true, workspace: 'd:/b' }),
+    ]) as never)
+    expect(store.rankForInjection(1, 'pnpm', 'd:/a').map(r => r.id)).toEqual(['match'])
+    expect(store.rankForInjection(10, 'pnpm', 'd:/a', 70).map(r => r.id)).toEqual(['match'])
+  })
+})
 
 describe('MemoryStore.merge', () => {
   it('approves a pending duplicate only after an approved merge', async () => {

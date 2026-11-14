@@ -57,8 +57,8 @@ export const Config: z<Config> = z.object({
 /** Storage domain: one per-record table of memory rows. */
 const memoryDomain = defineDomain({
   name: 'dsh_memory',
-  version: 5,
-  compatibleVersions: [1, 2, 3, 4],
+  version: 6,
+  compatibleVersions: [1, 2, 3, 4, 5],
   layout: 'per-record',
   tables: {
     memories: {
@@ -71,6 +71,7 @@ const memoryDomain = defineDomain({
         workspace: zod.string().optional(),
         supersededAt: zod.string().optional(),
         approved: zod.boolean().optional(),
+        pinned: zod.boolean().optional(),
         supersedes: zod.array(zod.string()).optional(),
         replacementIds: zod.array(zod.string()).optional(),
         confidence: zod.number(),
@@ -197,10 +198,35 @@ export function apply(ctx: Context, config: Config): void {
       const memories = requireStore().scoped(workspace)
       return {
         count: memories.length,
-        lines: memories.map(m => `#${m.id.slice(0, 8)} [${m.kind}] ${m.text}（置信度 ${m.confidence.toFixed(2)}${m.workspace ? `，工作区 ${m.workspace}` : '，全局'}${m.supersededAt ? '，已被取代' : ''}${m.approved === false ? '，⏳待审批' : ''}）`),
+        lines: memories.map(m => `#${m.id.slice(0, 8)} [${m.kind}] ${m.text}（${m.pinned ? '持久保留' : '普通记忆'}，置信度 ${m.confidence.toFixed(2)}${m.workspace ? `，工作区 ${m.workspace}` : '，全局'}${m.supersededAt ? '，已被取代' : ''}${m.approved === false ? '，⏳待审批' : ''}）`),
       }
     },
     presentCall: () => ({ card: 'generic', title: '列出项目记忆', kind: 'other', rawInput: {} }),
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'memory_pin',
+    description: 'Set or cancel persistent retention for one approved, active memory, only when explicitly requested by the user. Use memory_list to identify the exact record. Persistent memories do not decay with time, but can still be replaced or deleted and remain subject to relevance and prompt limits. This does not approve pending memories.',
+    parameters: {
+      id: { type: 'string', required: true, description: 'Unique memory id prefix from memory_list.' },
+      pinned: { type: 'boolean', required: true, description: 'true to retain without time decay; false to resume decay using the original age.' },
+    },
+    output: {
+      schema: { type: 'object', additionalProperties: false, properties: { updated: { type: 'boolean', required: true }, detail: { type: 'string', required: true } } },
+      render: (_args, value) => [{ type: 'text', text: value.detail }],
+    },
+    async execute(args, exec) {
+      const workspace = toolWorkspace(exec)
+      await ready
+      const out = await requireStore().pin(args.id, args.pinned, workspace)
+      return {
+        updated: out !== undefined,
+        detail: !out ? '未找到唯一匹配的已批准、未退役记忆' : args.pinned
+          ? `已设为持久保留：[${out.kind}] ${out.text}；仍受相关性与上下文容量限制，可更新或删除`
+          : `已取消持久保留：[${out.kind}] ${out.text}；按原时间恢复衰减，可能不再自动注入`,
+      }
+    },
+    presentCall: args => ({ card: 'generic', title: args.pinned ? '设置持久记忆' : '取消持久保留', kind: 'other', rawInput: args }),
   }))
 
   ctx.tools.register(defineTool({
