@@ -26,6 +26,8 @@
     </div>
   </header>
 
+  <p class="sec-desc"><strong>v0.5.0：用户指定持久记忆。</strong>以下真实模型评测和操作录像来自 v0.4.1；新增功能的确定性验证单独记录。</p>
+
   <section class="demo">
     <h2>从真实记录看跨上下文召回</h2>
     <p class="sec-desc">2026-11-14 小试验节选。真实 API 响应，学习后销毁并重建宿主上下文；下方是记录展示，非现场终端录屏。</p>
@@ -58,7 +60,7 @@
       <div class="feature"><h3>语义去重</h3><p>模型语义对齐与词项包含度兜底协作；本组 12 次同义重述均强化原记录，没有重复新增。</p></div>
       <div class="feature"><h3>工作区隔离</h3><p>注入与工具操作限定当前项目及全局记录；自动抽取只修改当前项目。</p></div>
       <div class="feature"><h3>相关性注入</h3><p>新会话按有效置信度 + 关键词重合度排序注入 Top-N，拒绝无脑全量灌上下文。</p></div>
-      <div class="feature"><h3>差异化衰减</h3><p>半衰期：fact 14 天，decision / convention 30 天，preference 45 天；衰减一半不等于立即删除。</p></div>
+      <div class="feature"><h3>用户指定持久记忆</h3><p>memory_pin 设置或取消持久保留。普通记忆半衰期为 fact 14 天、decision / convention 30 天、preference 45 天；持久记忆不参与时间衰减，仍可替代和删除。</p></div>
       <div class="feature"><h3>来源可解释</h3><p>每条记忆带条目编号与最近创建或强化日期；存储中保留初始会话编号，错了可用 memory_forget 删除。</p></div>
       <div class="feature"><h3>冲突消解</h3><p>新事实先写入，旧事实再退役留档；待审批替代项整批获准后才退役旧规则。识别效果仍依赖模型。</p></div>
       <div class="feature"><h3>审批准入</h3><p>requireApproval 开启后，自动候选经 memory_approve 批准才注入；冲突旧事实在替代项批准后退役。审批工具可由模型调用。</p></div>
@@ -66,7 +68,7 @@
   </section>
 
   <section id="evaluation">
-    <p class="eyebrow">2026-11-14 · 真实模型对照</p>
+    <p class="eyebrow">2026-11-14 · v0.4.1 真实模型对照</p>
     <h2>收益来自约定变更后的自动维护</h2>
     <p class="sec-desc">20 个固定合成主案例，各组重复 3 次。deepseek-flash，统一问题与评分。静态 AGENTS.md 是正确初始快照，之后冻结。</p>
     <div class="table-scroll"><table>
@@ -80,7 +82,7 @@
     </table></div>
     <p class="finding"><strong>多答对 9 次，增加 15 个百分点。</strong>全部来自 npm 改 pnpm、Node 18 改 22、周三发布改周五。恢复旧发布节奏时，静态组也答对。</p>
     <p class="finding"><strong>成本约为静态组的 5.73 倍 tokens。</strong>主实验包含历史抽取，未计人工维护时间，也未换算货币费用。全部 306 次请求共 89,057 tokens，含独立诊断 9,416 tokens。</p>
-    <p class="sec-desc">192 个实验单元全部完成；独立审批/删除诊断 12/12。插件回归测试 45 + 7，评测脚本自检另有 19 项；测试数量与模型作答数量分开统计。</p>
+    <p class="sec-desc">192 个实验单元全部完成；独立审批/删除诊断 12/12。当前 v0.5.0 / v0.2.2 插件回归测试 54 + 7，评测脚本自检另有 19 项；测试数量与模型作答数量分开统计。</p>
     <details open><summary>如何理解这些数字</summary>
       <ul>
         <li>仅限固定合成案例，60 次作答不是 60 个独立案例，没有独立留出集或显著性结论。</li>
@@ -104,17 +106,25 @@
       <div class="arch-row"><span class="arch-tag">抽取</span><code>ctx.llm.stream()</code> 辅助调用输出 JSON 候选，会增加调用量与轮末等待</div>
       <div class="arch-row"><span class="arch-tag">存储</span><code>ctx.storageDomain</code> 官方存储域 <code>dsh_memory</code>，per-record JSON 后端，零自建依赖</div>
       <div class="arch-row"><span class="arch-tag">注入</span><code>agent/created</code> 时挂 <code>systemPrompt.section()</code>，按当前问题动态求值</div>
-      <div class="arch-row"><span class="arch-tag">管理</span><code>ctx.tools.register()</code> 暴露 memory_list / memory_forget / memory_extract / memory_approve</div>
+      <div class="arch-row"><span class="arch-tag">管理</span><code>ctx.tools.register()</code> 暴露五个工具：memory_list / memory_forget / memory_extract / memory_approve / memory_pin</div>
     </div>
+  </section>
+
+  <section id="persistent">
+    <h2>长期约定由用户指定保留</h2>
+    <p>告诉 Agent：“把‘项目统一使用 pnpm’设为持久记忆。”先保存并查看条目，再调用 <code>memory_pin({id, pinned: true})</code>；取消使用 <code>false</code>。自动抽取不决定持久标记，只能设置已批准、未退役的条目。</p>
+    <p class="sec-desc">取消后按原时间恢复衰减，可能立即停止注入。重复合并保留标记，新规则替代不继承；持久记忆仍受工作区、相关性和上下文容量限制，并不保证每次注入。工具由 Agent 调用，不是独立人类认证。</p>
+    <p class="sec-desc">新增验证：模拟 180/365 天，真实 JSON 后端跨四次启动，旧 schema v1–v5 兼容与干净 Git 安装。无新增真实模型请求，不改动原 60/60、306 请求和成本统计；这些测试不能证明长期实际准确率或 14/30/45 天最优。</p>
+    <p><a href="evidence/persistent-memory-validation.md">v0.5.0 功能与安装验证</a></p>
   </section>
 
   <section id="install">
     <h2>快速开始</h2>
-    <p class="sec-desc">对应版本：<a href="https://github.com/ChenYueqi2024/dsh-memory/releases/tag/v0.4.1">dsh-memory v0.4.1</a> / <a href="https://github.com/ChenYueqi2024/dsh-commit/releases/tag/v0.2.2">dsh-commit v0.2.2</a>。运行时基线 dsh 0.2.0-rc.2，使用安装者自己的模型配置。</p>
+    <p class="sec-desc">当前公开安装版本：<a href="https://github.com/ChenYueqi2024/dsh-memory/releases/tag/v0.5.0">dsh-memory v0.5.0</a> / <a href="https://github.com/ChenYueqi2024/dsh-commit/releases/tag/v0.2.2">dsh-commit v0.2.2</a>。运行时基线 dsh 0.2.0-rc.2，使用安装者自己的模型配置。</p>
     <div class="term wide">
       <div class="term-bar"><i></i><i></i><i></i><span>bash</span></div>
       <pre>git clone https://github.com/ChenYueqi2024/dsh-memory && cd dsh-memory
-npm ci && npm test     # prepare 自动构建；45 个自动化用例（dsh-commit 另有 7 个）
+npm ci && npm test     # prepare 自动构建；54 个主插件测试，副插件另有 7 项
 
 # 通过插件管理器装入你的 profile；prepare 自动生成入口
 dsh plugin --profile &lt;name&gt; add github:ChenYueqi2024/dsh-memory
@@ -133,9 +143,9 @@ dsh plugin --profile &lt;name&gt; add github:ChenYueqi2024/dsh-memory
       <a class="btn" href="downloads/dsh-memory-operations.srt">操作视频字幕</a>
       <a class="btn" href="downloads/team-contribution.md">单人组与 AI 分工</a>
     </div>
-    <h3 class="video-title">具体怎么用：保存、查看、跨会话召回与删除</h3>
+    <h3 class="video-title">v0.4.1 操作录像：保存、查看、跨会话召回与删除</h3>
     <video controls preload="metadata" playsinline poster="downloads/operations-poster.png" src="downloads/dsh-memory-operations.mp4" aria-label="五步真实 CLI 操作演示，动态鲸鱼配合讲解"></video>
-    <p class="sec-desc">PPT 负责研究与结果，视频专注使用过程。安装与配置指引之后，是五次真实独立 CLI 启动：memory_extract 保存 → memory_list 查看 → 新会话召回 → memory_forget 删除 → 再次启动后无依据拒答。小鲸鱼随章节滑入、浮动并切换姿态，配中文合成语音与字幕。</p>
+    <p class="sec-desc">PPT 已更新至 v0.5.0 持久记忆版；视频保留 v0.4.1 使用过程，尚未演示 memory_pin。安装与配置指引之后，是五次真实独立 CLI 启动：memory_extract 保存 → memory_list 查看 → 新会话召回 → memory_forget 删除 → 再次启动后无依据拒答。小鲸鱼随章节滑入、浮动并切换姿态，配中文合成语音与字幕。</p>
     <p class="sec-desc">本次为手动管理演示，extractMinChars=100000、requireApproval=false，避免确认语句触发自动重学；默认自动模式为 120 字/90 秒。浏览器捕获真实 CLI 输出，保留等待和模型对编号类型不确定的原话；编号已由存储核实为 #c2a8ef55 记忆条目。新演示不计入 306 次正式评测，删除不代表永久禁止再次学习。</p>
     <p><a href="evidence/operations-review.md">操作录制与验证说明</a> · <a href="evidence/operations-transcript.json">原始操作输出</a> · <a href="evidence/operations-verification.json">五步验证记录</a></p>
     <p class="sec-desc">历史扩展材料：<a href="downloads/dsh-memory-intro-video.mp4">评测讲解完整片（4 分 24 秒）</a> · <a href="downloads/dsh-memory-intro-video.srt">旧版字幕</a>。已发布 Release 的原始附件保留；本页提供最新答辩材料。</p>
@@ -155,7 +165,7 @@ chore(license): 添加 MIT 许可证</pre>
 
   <footer>
     厦门大学《学科实践三 —— A+ 协同编程·项目实战》期末工程 · 单人组 · AI 协同开发<br>
-    基于 <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness (dsh) 0.2.0-rc.2</a> · MIT License · 2026-11-14 评测快照
+    基于 <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness (dsh) 0.2.0-rc.2</a> · MIT License · v0.5.0 持久记忆 / v0.4.1 历史评测
   </footer>
 </div>
 </body>
