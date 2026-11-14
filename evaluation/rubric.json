@@ -1,0 +1,29 @@
+{
+  "version": "1.0.0",
+  "cases": {
+    "recall-package": {"answers": ["pnpm"]},
+    "recall-codename": {"answers": ["海岬-47"]},
+    "recall-port": {"answers": ["18463"]},
+    "recall-test-command": {"answers": ["uv run pytest"]},
+    "paraphrase-directory": {"answers": ["/srv/iris-release"], "memory": {"active": 1}},
+    "paraphrase-branch": {"answers": ["zenith-main"], "memory": {"active": 1}},
+    "paraphrase-domain": {"answers": ["api.larch.internal"], "memory": {"active": 1}},
+    "paraphrase-language": {"answers": ["简体中文", "简体汉语"], "memory": {"active": 1}},
+    "update-package": {"answers": ["pnpm"], "memory": {"active": 1, "supersededMin": 1}},
+    "update-runtime": {"answers": ["22"], "memory": {"active": 1, "supersededMin": 1}},
+    "update-release-day": {"answers": ["周五", "星期五", "每周五"]},
+    "update-revert": {"answers": ["每周一次", "每周", "一周一次"], "memory": {"active": 1, "supersededMin": 2}},
+    "scope-unknown": {"answers": ["UNKNOWN"]},
+    "scope-package-b": {"answers": ["bun"]},
+    "scope-port-a": {"answers": ["17321"]},
+    "scope-update-b": {"answers": ["maple-stable"]},
+    "abstain-unspecified": {"answers": ["UNKNOWN"]},
+    "abstain-hypothesis": {"answers": ["UNKNOWN"]},
+    "abstain-temporary": {"answers": ["UNKNOWN"]},
+    "abstain-quoted-injection": {"answers": ["UNKNOWN"]},
+    "control-pending": {"answers": ["UNKNOWN"], "memory": {"active": 0, "pending": 1}},
+    "control-approved": {"answers": ["pnpm"], "memory": {"active": 1, "pending": 0}},
+    "control-forgotten": {"answers": ["UNKNOWN"], "memory": {"total": 0}},
+    "control-partial-conflict": {"answers": ["npm"], "memory": {"active": 2, "pending": 1, "superseded": 0}}
+  }
+}

@@ -14,8 +14,6 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineDomain } from '@deepseek-ai/dsh-storage-domain'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
-import { createUserMessage, BlockAssembler } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { z as zod } from 'zod'
 import { MemoryStore, formatMemorySection, type MemoryRecord } from './store.ts'
@@ -59,8 +57,8 @@ export const Config: z<Config> = z.object({
 /** Storage domain: one per-record table of memory rows. */
 const memoryDomain = defineDomain({
   name: 'dsh_memory',
-  version: 4,
-  compatibleVersions: [1, 2, 3],
+  version: 5,
+  compatibleVersions: [1, 2, 3, 4],
   layout: 'per-record',
   tables: {
     memories: {
@@ -73,6 +71,8 @@ const memoryDomain = defineDomain({
         workspace: zod.string().optional(),
         supersededAt: zod.string().optional(),
         approved: zod.boolean().optional(),
+        supersedes: zod.array(zod.string()).optional(),
+        replacementIds: zod.array(zod.string()).optional(),
         confidence: zod.number(),
         hits: zod.number(),
         lastHitAt: zod.string().optional(),
@@ -83,7 +83,6 @@ const memoryDomain = defineDomain({
 
 export function apply(ctx: Context, config: Config): void {
   const log = ctx.logger.bind?.('dsh-memory') ?? ctx.logger
-  let lastError: string | undefined
   let store: MemoryStore | undefined
   const transcripts = new Map<string, TranscriptBuffer>()
   const latestQuery = new Map<string, string>()
@@ -91,7 +90,8 @@ export function apply(ctx: Context, config: Config): void {
   const lastSeen = new Map<string, number>()
   let failStreak = 0
   let cooldownUntil = 0
-  let lastExtractAt = 0
+  const lastExtractAt = new Map<string, number>()
+  const inFlight = new Map<string, Promise<SettleResult>>()
 
   const ready = (async () => {
     const domain: Domain<typeof memoryDomain> = await ctx.storageDomain.open(memoryDomain)
@@ -116,28 +116,22 @@ export function apply(ctx: Context, config: Config): void {
     }
   })
 
-  ctx.on('session/disposed', (session: { id: string }) => {
+  ctx.on('session/disposed', async (session: { id: string }) => {
     const buffer = transcripts.get(session.id)
     const workspace = workspaces.get(session.id)
-    const settledChars = lastSeen.get(session.id) ?? 0
-    transcripts.delete(session.id)
-    latestQuery.delete(session.id)
-    workspaces.delete(session.id)
-    lastSeen.delete(session.id)
-    if (!buffer) {
-      debugLog('session-end: skipped (no transcript)')
-      return
+    try {
+      await inFlight.get(session.id)
+      if (!buffer || Date.now() < cooldownUntil) return
+      const delta = buffer.seen - (lastSeen.get(session.id) ?? 0)
+      if (buffer.size() === 0 || delta < config.extractMinChars) return
+      await settle('session-end', session.id, buffer, workspace)
+    } finally {
+      transcripts.delete(session.id)
+      latestQuery.delete(session.id)
+      workspaces.delete(session.id)
+      lastSeen.delete(session.id)
+      lastExtractAt.delete(session.id)
     }
-    // 与 turn-stopping 保持同一套口径：① 工作区必须显式传递——漏传会把
-    // 这条兜底路径沉淀的记忆打成全局，跨工作区泄漏；② 只处理自上次抽取
-    // 以来新增的文本——turn-stopping 刚抽取过的尾部窗口不重复抽，否则
-    // 二次抽取多半输出 reinforce，把置信度反复灌向上限、抵消衰减设计
-    const delta = buffer.seen - settledChars
-    if (buffer.size() < config.extractMinChars || delta < config.extractMinChars) {
-      debugLog(`session-end: skipped (buffer ${buffer.size()}, delta ${delta} < ${config.extractMinChars})`)
-      return
-    }
-    void settle('session-end', session.id, buffer, workspace)
   })
 
   // headless/CLI 进程在会话后很快退出，session/disposed 可能来不及触发；
@@ -146,19 +140,19 @@ export function apply(ctx: Context, config: Config): void {
     const sessionId: string | undefined = agent?.session?.id
     if (agent?.session?.header?.origin === 'subagent') return
     if (!sessionId) return
+    if (inFlight.has(sessionId)) { await inFlight.get(sessionId); return }
     const buffer = transcripts.get(sessionId)
     if (!buffer) return
     if (Date.now() < cooldownUntil) return  // 连续失败退避中，暂停自动抽取
     // 频率节制：自动抽取是付费 LLM 调用且在 turn-stopping 里 await，长会话
     // 每轮都抽既烧 token 又拖慢轮次结束；间隔内的增量累积到下一次合格轮次
-    if (Date.now() - lastExtractAt < config.autoExtractMinIntervalMs) return
+    const previous = lastExtractAt.get(sessionId)
+    if (previous !== undefined && Date.now() - previous < config.autoExtractMinIntervalMs) return
     // 增量触发：只处理自上次抽取以来新增的文本，避免每轮重复抽取
     const delta = buffer.seen - (lastSeen.get(sessionId) ?? 0)
     if (delta < config.extractMinChars || buffer.size() === 0) return
-    lastSeen.set(sessionId, buffer.seen)
-    lastExtractAt = Date.now()
+    lastExtractAt.set(sessionId, Date.now())
     await settle('turn-end', sessionId, buffer, workspaces.get(sessionId))
-    buffer.keepTail(1600)  // 保留尾部窗口：相邻轮次的上下文不丢失
   })
 
   // ── 2. 注入：新 agent 创建时把相关记忆写进 system prompt ───────────────
@@ -191,14 +185,16 @@ export function apply(ctx: Context, config: Config): void {
   // ── 3. 管理工具 ────────────────────────────────────────────────────────
   ctx.tools.register(defineTool({
     name: 'memory_list',
-    description: 'List all long-term project memories stored by dsh-memory.',
+    description: 'List memories for the current workspace and shared global memories, including pending and retired rows.',
     parameters: {},
     output: {
       schema: { type: 'object', additionalProperties: false, properties: { count: { type: 'integer', required: true }, lines: { type: 'array', required: true, items: { type: 'string' } } } },
       render: (_args, value) => [{ type: 'text', text: value.count === 0 ? '（暂无长期记忆）' : value.lines.join('\n') }],
     },
-    async execute() {
-      const memories = requireStore().all()
+    async execute(_args, exec) {
+      const workspace = toolWorkspace(exec)
+      await ready
+      const memories = requireStore().scoped(workspace)
       return {
         count: memories.length,
         lines: memories.map(m => `#${m.id.slice(0, 8)} [${m.kind}] ${m.text}（置信度 ${m.confidence.toFixed(2)}${m.workspace ? `，工作区 ${m.workspace}` : '，全局'}${m.supersededAt ? '，已被取代' : ''}${m.approved === false ? '，⏳待审批' : ''}）`),
@@ -217,8 +213,10 @@ export function apply(ctx: Context, config: Config): void {
       schema: { type: 'object', additionalProperties: false, properties: { approved: { type: 'boolean', required: true }, detail: { type: 'string', required: true } } },
       render: (_args, value) => [{ type: 'text', text: value.detail }],
     },
-    async execute(args) {
-      const out = await requireStore().approve(args.id)
+    async execute(args, exec) {
+      const workspace = toolWorkspace(exec)
+      await ready
+      const out = await requireStore().approve(args.id, workspace)
       return { approved: out !== undefined, detail: out ? `已批准：[${out.kind}] ${out.text}` : '未找到匹配的记忆' }
     },
     presentCall: args => ({ card: 'generic', title: '批准项目记忆', kind: 'other', rawInput: args }),
@@ -235,9 +233,11 @@ export function apply(ctx: Context, config: Config): void {
       schema: { type: 'object', additionalProperties: false, properties: { deleted: { type: 'boolean', required: true }, detail: { type: 'string', required: true } } },
       render: (_args, value) => [{ type: 'text', text: value.detail }],
     },
-    async execute(args) {
+    async execute(args, exec) {
+      const workspace = toolWorkspace(exec)
+      await ready
       const s = requireStore()
-      const removed = await s.forget(args.id, args.keyword)
+      const removed = await s.forget(args.id, args.keyword, workspace)
       return { deleted: removed !== undefined, detail: removed ? `已删除记忆：[${removed.kind}] ${removed.text}` : '未找到匹配的记忆' }
     },
     presentCall: args => ({ card: 'generic', title: '删除项目记忆', kind: 'other', rawInput: args }),
@@ -252,25 +252,31 @@ export function apply(ctx: Context, config: Config): void {
       render: (_args, value) => [{ type: 'text', text: value.detail }],
     },
     async execute(_args, exec) {
-      const sessionId: string = exec.agent?.session?.id
-        ?? (() => { throw new Error('memory_extract requires an owning agent session') })()
+      const workspace = toolWorkspace(exec)
+      const sessionId: string = exec.agent!.session.id
+      await inFlight.get(sessionId)
       const buffer = transcripts.get(sessionId) ?? new TranscriptBuffer()
       // 用户显式要求"记住X"（调用本工具）视为已授权：requireApproval 模式下也直接生效；
       // 只有轮末的自动沉淀才走待审批
-      const { newRows, reinforced } = await settle('tool', sessionId, buffer, exec.agent?.session?.header?.cwd, true)
-      lastSeen.set(sessionId, buffer.seen)
-      buffer.keepTail(1600)
-      const note = lastError ? `；失败原因：${lastError}` : ''
-      lastError = undefined
+      const { newRows, reinforced, error } = await settle('tool', sessionId, buffer, workspace, true)
+      const note = error ? `；失败原因：${error}` : ''
       const saved = newRows + reinforced
-      const pending = requireStore().all().filter(m => m.approved === false).length
+      const visible = requireStore().scoped(workspace)
+      const pending = visible.filter(m => m.approved === false).length
       const pendingNote = pending > 0 ? `；待审批 ${pending} 条（memory_approve 批准）` : ''
-      return { saved, detail: `本次新增 ${newRows} 条、强化 ${reinforced} 条（总计 ${requireStore().all().length} 条）${pendingNote}${note}` }
+      return { saved, detail: `本次新增 ${newRows} 条、强化 ${reinforced} 条（总计 ${visible.length} 条）${pendingNote}${note}` }
     },
     presentCall: () => ({ card: 'generic', title: '沉淀当前会话记忆', kind: 'other', rawInput: {} }),
   }))
 
   // ── helpers ───────────────────────────────────────────────────────────
+  function toolWorkspace(exec: { agent?: { session?: { id?: string; header?: { cwd?: string; origin?: string } } } }): string | undefined {
+    const session = exec.agent?.session
+    if (!session?.id) throw new Error('memory tools require an owning agent session')
+    if (session.header?.origin === 'subagent') throw new Error('memory tools are unavailable to subagents')
+    return normalizeWorkspace(session.header?.cwd)
+  }
+
   function bufferFor(sessionId: string): TranscriptBuffer {
     let b = transcripts.get(sessionId)
     if (!b) {
@@ -285,54 +291,71 @@ export function apply(ctx: Context, config: Config): void {
     return store
   }
 
-  /** Run extraction, merge into the store; returns {newRows, reinforced}. */
-  async function settle(trigger: string, sessionId: string, buffer: TranscriptBuffer, workspace?: string, forceApproved = false): Promise<{ newRows: number; reinforced: number }> {
-    await ready
+  interface SettleResult { newRows: number; reinforced: number; error?: string }
+
+  /** Track one in-flight extraction per session; advance the cursor only on success. */
+  function settle(trigger: string, sessionId: string, buffer: TranscriptBuffer, workspace?: string, forceApproved = false): Promise<SettleResult> {
+    const pending = inFlight.get(sessionId)
+    if (pending) return pending
+    const seen = buffer.seen
     const transcript = buffer.render()
-    if (transcript.trim().length === 0) {
-      lastError = 'transcript is empty (no buffered user/assistant text)'
-      debugLog(`settle(${trigger}): ${lastError}`)
-      return { newRows: 0, reinforced: 0 }
-    }
-    debugLog(`settle(${trigger}): transcript ${transcript.length} chars`)
+    const work = extractAndStore(trigger, sessionId, transcript, workspace, forceApproved).then(result => {
+      if (!result.error) {
+        lastSeen.set(sessionId, seen)
+        if (buffer.seen === seen) buffer.keepTail(1600)
+      }
+      return result
+    }).finally(() => inFlight.delete(sessionId))
+    inFlight.set(sessionId, work)
+    return work
+  }
+
+  async function extractAndStore(trigger: string, sessionId: string, transcript: string, workspace?: string, forceApproved = false): Promise<SettleResult> {
     try {
+      await ready
+      if (!transcript.trim()) throw new Error('transcript is empty (no buffered user/assistant text)')
+      debugLog(`settle(${trigger}): transcript ${transcript.length} chars`)
       const ws = normalizeWorkspace(workspace)
       const existing: ExistingMemory[] = requireStore().all()
-        .filter(m => m.workspace === undefined || m.workspace === ws)
+        .filter(m => m.workspace === ws && !m.supersededAt)
         .slice(0, 50)
         .map(m => ({ id: m.id, text: m.text }))
       const extracted = await extractMemories(ctx, config, sessionId, transcript, existing)
       debugLog(`settle(${trigger}): extracted ${JSON.stringify(extracted)}`)
       const store = requireStore()
-      // 冲突消解先于去重：被取代的旧记录要从复述去重的匹配池里排除，
-      // 否则"同主题改写"（如发布节奏从每周改为每月）会被去重误判为复述
-      const supersededIds: string[] = []
-      let superseded = 0
-      for (const idPrefix of extracted.supersede) {
-        const rec = await store.supersede(idPrefix)
-        if (rec) { supersededIds.push(rec.id); superseded++ }
+      // Only accept unambiguous IDs that were offered to this extraction call.
+      const resolveIds = (prefixes: string[]) => [...new Set(prefixes.flatMap(prefix => {
+        const matches = existing.filter(m => m.id.startsWith(prefix))
+        return matches.length === 1 ? [matches[0].id] : []
+      }))]
+      const supersededIds = resolveIds(extracted.supersede)
+      const approved = forceApproved || !config.requireApproval
+      // Exclude old facts before dedupe, but retire them only after the new row
+      // is persisted and approved. Pending replacements keep the old fact live.
+      const newRows = await store.merge(extracted.new, { sessionId, workspace: ws, excludeIds: supersededIds, approved })
+      if (approved && extracted.new.length === 0) {
+        for (const id of supersededIds) await store.supersede(id, ws)
       }
-      let newRows = await store.merge(extracted.new, { sessionId, workspace: ws, excludeIds: supersededIds, approved: forceApproved || !config.requireApproval })
       let reinforced = 0
-      for (const idPrefix of extracted.reinforce) {
-        if (await store.reinforce(idPrefix)) reinforced++
+      for (const id of resolveIds(extracted.reinforce)) {
+        if (!supersededIds.includes(id) && await store.reinforce(id, ws, approved)) reinforced++
       }
       failStreak = 0
-      if (newRows + reinforced + superseded > 0) {
-        log.info(`dsh-memory: ${trigger} new ${extracted.new.length}, reinforced ${reinforced}, superseded ${superseded}`)
+      if (newRows + reinforced + supersededIds.length > 0) {
+        log.info(`dsh-memory: ${trigger} new ${newRows}, reinforced ${reinforced}, conflict targets ${supersededIds.length}`)
       }
       return { newRows, reinforced }
     } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error)
-      debugLog(`settle(${trigger}) FAILED: ${lastError}`)
-      log.warn(`dsh-memory: extraction failed (${trigger}): ${lastError}`)
+      const message = error instanceof Error ? error.message : String(error)
+      debugLog(`settle(${trigger}) FAILED: ${message}`)
+      log.warn(`dsh-memory: extraction failed (${trigger}): ${message}`)
       failStreak++
       if (failStreak >= 3) {
         cooldownUntil = Date.now() + 10 * 60_000  // 连续 3 次失败，自动抽取退避 10 分钟
         failStreak = 0
         log.warn('dsh-memory: extraction failed 3x, auto-extraction paused for 10 minutes')
       }
-      return { newRows: 0, reinforced: 0 }
+      return { newRows: 0, reinforced: 0, error: message }
     }
   }
 

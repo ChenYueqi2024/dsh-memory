@@ -23,6 +23,10 @@ export interface MemoryRecord {
   supersededAt?: string
   /** false = awaiting user approval (requireApproval mode); undefined/true = approved. */
   approved?: boolean
+  /** Old rows to retire only when this replacement is approved. */
+  supersedes?: string[]
+  /** All candidates in a conflict batch must survive and be approved first. */
+  replacementIds?: string[]
 }
 
 /** Normalized extraction candidate arriving from the LLM. */
@@ -35,9 +39,9 @@ export interface MemoryCandidate {
 export interface MergeContext {
   sessionId: string
   workspace?: string
-  /** Records just superseded this round: excluded from dedupe matching so a
-   * changed fact lands as a new row instead of reinforcing the stale one. */
+  /** Conflict targets excluded from dedupe; retired after replacement approval. */
   excludeIds?: string[]
+  approved?: boolean
 }
 
 const KIND_RANK: Record<MemoryRecord['kind'], number> = { decision: 4, convention: 3, preference: 2, fact: 1 }
@@ -65,6 +69,11 @@ export class MemoryStore {
     return [...this.table.entries()].map(([, record]) => record).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   }
 
+  /** Current workspace plus legacy global rows; never another project's rows. */
+  scoped(workspace?: string): MemoryRecord[] {
+    return this.all().filter(record => record.workspace === undefined || record.workspace === workspace)
+  }
+
   /**
    * Merge extracted candidates. A candidate that exactly matches an existing
    * memory, or is a rephrasing of one (token containment >= DEDUPE_SIMILARITY
@@ -74,11 +83,12 @@ export class MemoryStore {
   async merge(candidates: MemoryCandidate[], context: MergeContext): Promise<number> {
     const approved = context.approved !== false
     let added = 0
+    const mergedIds: string[] = []
     for (const candidate of candidates) {
       const text = candidate.text.trim()
       if (text.length === 0) continue
       const existing = this.findDuplicate(text, context.workspace, context.excludeIds)
-      if (existing) {
+      if (existing && !(!approved && context.excludeIds?.length && existing.approved !== false)) {
         await this.table.put(existing.id, {
           ...existing,
           workspace: existing.workspace ?? context.workspace,
@@ -87,7 +97,9 @@ export class MemoryStore {
           kind: candidate.kind,
           confidence: Math.min(2, existing.confidence + 0.1),
           createdAt: new Date().toISOString(),
+          supersedes: [...new Set([...(existing.supersedes ?? []), ...(context.excludeIds ?? [])])],
         })
+        mergedIds.push(existing.id)
         continue
       }
       const id = newId()
@@ -101,8 +113,21 @@ export class MemoryStore {
         confidence: 1 + (KIND_RANK[candidate.kind] ?? 0) * 0.1,
         hits: 0,
         approved,
+        supersedes: context.excludeIds,
       })
+      mergedIds.push(id)
       added++
+    }
+    // The extraction contract lists conflict IDs separately from candidates,
+    // without a one-to-one mapping. Require the complete batch conservatively.
+    if (context.excludeIds?.length) {
+      for (const id of new Set(mergedIds)) {
+        const record = this.table.get(id)!
+        await this.table.put(id, { ...record, replacementIds: [...new Set([...(record.replacementIds ?? []), ...mergedIds])] })
+      }
+    }
+    if (approved) {
+      for (const id of new Set(mergedIds)) await this.approve(id, context.workspace)
     }
     return added
   }
@@ -111,13 +136,12 @@ export class MemoryStore {
    * Reinforce an existing record by id prefix (LLM-judged semantic duplicate):
    * bump confidence instead of writing a new row. Returns the reinforced row.
    */
-  async reinforce(idPrefix: string): Promise<MemoryRecord | undefined> {
-    const needle = idPrefix.replace(/^#/, '')
-    const record = this.all().find(m => m.id.startsWith(needle))
-    if (!record) return undefined
+  async reinforce(idPrefix: string, workspace?: string, approved = false): Promise<MemoryRecord | undefined> {
+    const record = this.findByPrefix(idPrefix, workspace)
+    if (!record || record.supersededAt) return undefined
     const updated = { ...record, confidence: Math.min(2, record.confidence + 0.15), createdAt: new Date().toISOString() }
     await this.table.put(record.id, updated)
-    return updated
+    return approved ? this.approve(record.id, workspace) : updated
   }
 
   /**
@@ -125,9 +149,8 @@ export class MemoryStore {
    * deployment window moved). Superseded rows are excluded from injection but
    * stay in the store for audit; they can still be forgotten explicitly.
    */
-  async supersede(idPrefix: string): Promise<MemoryRecord | undefined> {
-    const needle = idPrefix.replace(/^#/, '')
-    const record = this.all().find(m => m.id.startsWith(needle))
+  async supersede(idPrefix: string, workspace?: string): Promise<MemoryRecord | undefined> {
+    const record = this.findByPrefix(idPrefix, workspace)
     if (!record || record.supersededAt) return record
     const updated = { ...record, supersededAt: new Date().toISOString(), confidence: Math.min(record.confidence, 0.1) }
     await this.table.put(record.id, updated)
@@ -197,26 +220,45 @@ export class MemoryStore {
   }
 
   /** Approve a pending record (requireApproval mode). Returns the approved row. */
-  async approve(idPrefix: string): Promise<MemoryRecord | undefined> {
-    const record = this.all().find(m => m.id.startsWith(idPrefix.replace(/^#/, '')))
-    if (!record) return undefined
+  async approve(idPrefix: string, workspace?: string): Promise<MemoryRecord | undefined> {
+    const record = this.findByPrefix(idPrefix, workspace)
+    if (!record || record.supersededAt) return undefined
     const updated = { ...record, approved: true }
     await this.table.put(record.id, updated)
+    if (record.replacementIds?.some(id => {
+      const replacement = this.table.get(id)
+      return !replacement || replacement.approved === false || replacement.supersededAt || replacement.workspace !== record.workspace
+    })) return updated
+    for (const id of record.supersedes ?? []) {
+      const old = this.table.get(id)
+      if (id !== record.id && old && old.workspace === record.workspace) await this.supersede(id, workspace)
+    }
+    if (updated.supersedes?.length) {
+      delete updated.supersedes
+      delete updated.replacementIds
+      await this.table.put(record.id, updated)
+    }
     return updated
   }
 
-  async forget(idPrefix?: string, keyword?: string): Promise<MemoryRecord | undefined> {
+  async forget(idPrefix?: string, keyword?: string, workspace?: string): Promise<MemoryRecord | undefined> {
     let target: MemoryRecord | undefined
     if (idPrefix) {
-      const needle = idPrefix.replace(/^#/, '')
-      target = this.all().find(m => m.id.startsWith(needle))
+      target = this.findByPrefix(idPrefix, workspace)
     } else if (keyword) {
       const needle = keyword.toLowerCase()
-      const matches = this.all().filter(m => m.text.toLowerCase().includes(needle))
+      const matches = this.scoped(workspace).filter(m => m.text.toLowerCase().includes(needle))
       if (matches.length === 1) target = matches[0]
     }
     if (target) await this.table.delete(target.id)
     return target
+  }
+
+  private findByPrefix(idPrefix: string, workspace?: string): MemoryRecord | undefined {
+    const needle = idPrefix.trim().replace(/^#/, '')
+    if (!needle) return undefined
+    const matches = this.scoped(workspace).filter(m => m.id.startsWith(needle))
+    return matches.length === 1 ? matches[0] : undefined
   }
 
   /** Exact normalized-text match first, then rephrase detection via containment. */
@@ -224,6 +266,7 @@ export class MemoryStore {
     const needle = normalizeText(text)
     const candidateTerms = tokenize(text)
     return this.all().find(record => {
+      if (record.supersededAt) return false
       if (excludeIds?.includes(record.id)) return false
       if ((record.workspace ?? undefined) !== (workspace ?? undefined)) return false
       if (normalizeText(record.text) === needle) return true

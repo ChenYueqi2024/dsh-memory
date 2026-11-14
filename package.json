@@ -1,6 +1,6 @@
 {
   "name": "dsh-memory",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Cross-session project memory for DeepSeek Harness (dsh): auto-extract durable facts/decisions/preferences at session end, retrieve and inject them into future sessions. Uses the host dsh instance model route - no bundled API key.",
   "type": "module",
   "main": "dist/index.js",
@@ -12,7 +12,9 @@
   ],
   "scripts": {
     "build": "node build.mjs",
+    "prepare": "npm run build",
     "test": "vitest run",
+    "test:eval": "node --test evaluation/selftest.mjs",
     "prepublishOnly": "npm test && npm run build"
   },
   "dsh": {
@@ -43,12 +45,20 @@
   },
   "homepage": "https://chenyueqi2024.github.io/dsh-memory/",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "0.2.0-rc.2",
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/schemastery": "~3.18.4",
+    "zod": "^4.0.0",
     "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
     "@deepseek-ai/dsh-storage-domain": "0.2.0-rc.2",
     "@deepseek-ai/dsh-tools": "0.2.0-rc.2"
   },
   "peerDependenciesMeta": {
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    },
     "@deepseek-ai/cordis": {
       "optional": true
     },

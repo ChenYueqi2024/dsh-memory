@@ -12,6 +12,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+      - run: npm ci
       - run: npm test
+      - run: npm run test:eval
       - run: npm run build
+      - name: Verify Git installation builds the entry point
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/plugin-install"
+          cd "$RUNNER_TEMP/plugin-install"
+          printf '{"private":true}\n' > package.json
+          npm install --no-audit --no-fund "git+file://$GITHUB_WORKSPACE"
+          node -e "const fs=require('node:fs'); for (const f of ['dist/index.js','cordis.patch.yml']) if (!fs.existsSync('node_modules/dsh-memory/'+f)) throw new Error('Missing '+f)"

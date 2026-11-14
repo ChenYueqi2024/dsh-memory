@@ -5,6 +5,7 @@
  */
 
 import { createUserMessage, BlockAssembler } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import type { Context } from '@deepseek-ai/cordis'
 import type { MemoryCandidate } from './store.ts'
 import type { Config } from './index.ts'

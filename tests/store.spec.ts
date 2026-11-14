@@ -26,6 +26,28 @@ function record(partial: Partial<MemoryRecord>): MemoryRecord {
 }
 
 describe('MemoryStore.merge', () => {
+  it('approves a pending duplicate only after an approved merge', async () => {
+    const store = new MemoryStore(fakeTable() as never)
+    const candidate = { kind: 'fact' as const, text: '本项目部署在 D 盘' }
+    await store.merge([candidate], { sessionId: 's1', approved: false })
+    await store.merge([candidate], { sessionId: 's2', approved: true })
+    expect(store.all()[0].approved).toBe(true)
+    expect(store.rankForInjection(10)).toHaveLength(1)
+    await store.merge([candidate], { sessionId: 's3', approved: false })
+    expect(store.all()[0].approved).toBe(true)
+  })
+
+  it('creates an active row when a previously superseded fact becomes true again', async () => {
+    const store = new MemoryStore(fakeTable() as never)
+    const candidate = { kind: 'fact' as const, text: '发布窗口固定在周三凌晨' }
+    await store.merge([candidate], { sessionId: 's1' })
+    const old = store.all()[0].id
+    await store.supersede(old)
+    expect(await store.merge([candidate], { sessionId: 's2' })).toBe(1)
+    expect(store.rankForInjection(10)).toHaveLength(1)
+    expect(store.rankForInjection(10)[0].id).not.toBe(old)
+  })
+
   it('adds new records and stamps the workspace', async () => {
     const store = new MemoryStore(fakeTable() as never)
     const added = await store.merge([{ kind: 'fact', text: '本项目部署在 D 盘' }], { sessionId: 's1', workspace: 'd:/dev/proj' })
@@ -179,6 +201,17 @@ describe('MemoryStore.supersede and budget', () => {
 })
 
 describe('MemoryStore.forget', () => {
+  it('does not mutate the first row for empty or ambiguous id prefixes', async () => {
+    const store = new MemoryStore(fakeTable([record({ id: 'same-1' }), record({ id: 'same-2' })]) as never)
+    for (const id of ['', '#', 'same']) {
+      expect(await store.approve(id)).toBeUndefined()
+      expect(await store.supersede(id)).toBeUndefined()
+      expect(await store.reinforce(id)).toBeUndefined()
+      expect(await store.forget(id)).toBeUndefined()
+    }
+    expect(store.all()).toHaveLength(2)
+  })
+
   it('deletes by id prefix and by unique keyword, not by ambiguous keyword', async () => {
     const table = fakeTable([
       record({ id: 'abcd1234-x', text: '记忆条目甲' }),
